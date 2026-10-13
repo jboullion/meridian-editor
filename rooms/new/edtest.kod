@@ -1,0 +1,49 @@
+// The room editor's in-game test room (meridian-editor rooms/new/edtest.room.json).
+// tools/shards/install.ts copies this into the server's Kod tree. Reached only by
+// an admin teleport (RID 4200); its one exit leads to Tos.
+
+////////////////////////////////////////////////////////////////////////////////
+EditorTestRoom is Room
+
+constants:
+
+   include blakston.khd
+
+resources:
+
+   room_name_EditorTestRoom = "The Editor's Test Room"
+   room_EditorTestRoom = edtest.roo
+
+classvars:
+
+   vrName = room_name_EditorTestRoom
+
+   viTeleport_row = 7
+   viTeleport_col = 2
+
+   viTerrain_Type = TERRAIN_CITY
+
+properties:
+
+   viPermanent_flags = ROOM_NO_COMBAT
+
+   prRoom = room_EditorTestRoom
+   piRoom_num = 4200
+
+   piBaseLight = LIGHT_NICE
+   piOutside_factor = 3
+
+messages:
+
+   CreateStandardExits()
+   {
+      plExits = $;
+
+      // to Tos, outside the inn
+      plExits = Cons([ 11, 8, RID_TOS, 45, 31, ROTATE_NONE ],plExits);
+
+      propagate;
+   }
+
+end
+////////////////////////////////////////////////////////////////////////////////

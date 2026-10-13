@@ -1,0 +1,31 @@
+# Agent notes
+
+- **Never commit `.roo` files.** They are build output and game art. Room sources (`.room.json`) are what gets committed, in the Shards repo (meridian-browser), not here. See ADR 0001.
+- **Local rooms:** `rooms/104/` is a git-ignored copy of meridian-browser's server rooms, and `rooms/src/` holds their sources. Work there; don't edit meridian-browser's room files yet.
+- **New rooms** go in `rooms/new/`: `<room>.room.json`, its Kod class `<room>.kod`, and a walk test `<room>.walk.json`. `edtest` (RID 4200) is the editor's test room, made by `tools/shards/make-edtest.ts`.
+- **The reference trees are read-only:** `meridian-unreal/ReferenceServers/MeridianSteam/Meridian59` (original) and `.../Server-104`. Cite them as `o:` and `s:` paths.
+- **Port, don't redesign.** `packages/roomc/src/bsp.ts`, `grids.ts`, `slope.ts` and `compile.ts` follow roomedit's C line by line, including list order, float vs double and C rounding. Byte-for-byte output against the shipped rooms is the test. Run `npm run check` after touching them.
+- **Compat flags are for imports only.** `RoomSource.compat` holds older-roomedit quirks that import detects so shipped rooms recompile exactly. New rooms leave it unset.
+- **This repo is GPL-2.0-only.** meridian-unreal bans GPL code; it may only consume compiled `.roo` files.
+- **The editor app (`apps/editor`):**
+  - The renderer imports `roo` and `roomc` directly and compiles in a worker (`compile.worker.ts`).
+  - All file access goes through `host.ts`: the Electron bridge in the app, or `/api/rooms` on the Vite dev server in a browser. Keep the two in step.
+  - Room operations are pure functions in `src/renderer/ops`, ported from roomedit's `objects.cpp` where one exists. They throw `OpError` with a user-facing message.
+  - Edits are applied through `edit()` in `store.ts` (one undo step) or `beginGesture`/`previewEdit`/`endGesture` (drags).
+  - Every user action is a command in `commands.tsx`. Add new ones there and they appear in the shortcuts, the context menu and the palette; the native menu (`src/main/main.ts`) sends command ids.
+  - Drawing (`ops/draw.ts`) traces faces on a planar graph. Shipped rooms can overlap; `ops/realrooms.test.ts` checks that drawing never breaks a sector loop.
+- **Walk mode** (`src/renderer/preview/walker.ts`) ports meridian-browser's `PlayerMover` (its `move.c` port), without the server, object and sound parts. `walker.test.ts` checks it frame by frame against `PlayerMover`; change the two together.
+- **Preview lighting** (`src/renderer/preview/lighting.ts`, `gameLight.ts`): the shader ports meridian-browser's `packages/render/src/lighting.ts` (without enhanced lighting or light sources). The light values at a game hour follow the server's Kod; `kodRoomLight` reads a class's light properties through its parents. Keep the formulas in step with both.
+- **Light sources** (`src/renderer/kod/kodLights.ts`): what each placed object's `SendLightingInformation` would send, worked out from Kod (flickerer classes, ornaments, signs, news globes). The host reads those object files (`src/main/kod.ts LIGHT_OBJECTS`). The shader's light maps follow meridian-browser's `lighting.ts`.
+- **Kod placements** (`src/renderer/kod`): `kodRooms.ts` parses the server's room classes (exits, generators, `NewHold`, ornament lists, sounds) with regexes, read-only. The Kod comes from the host (`readKod`, `src/main/kod.ts`), like textures.
+- **Testing in Shards** (`tools/shards`): `shards:install` puts a room on the local Shards server; `shards:walk` walks it.
+  - It writes only git-ignored paths in meridian-browser: `server/src/...` and `dist/assets`.
+  - A Kod change runs `reload system`, which saves the game.
+  - Test with `shardpal`, never an account someone is playing (`who` on the maintenance port shows them). The user often plays on the local server.
+  - The 104 server doesn't check players against walls, steps or ceilings; the client does (`move.c`). So the walk test drives Shards' `PlayerMover`, and a missing server snap-back proves nothing.
+- **Installers** (`apps/editor/electron-builder.yml`, `npm run editor:dist`): output goes to `apps/editor/release/` (git-ignored; `dist/` is the renderer build). Everything the app needs is bundled, so its dependencies are all devDependencies. Packaged, `main.ts` has no repo: folders come from `settings.json` in userData, and the Kod folder from Preferences.
+  - Files the system opens (argv, a second launch through the single-instance lock, macOS `open-file`) go to the page as `file:opened` once it says `file:ready`. In the renderer they go through `actions.ts openFromSystem`.
+  - The association is "Open with" for `.json` and `.roo`, never the default. Windows has only last-extension associations, so `.room.json` is `.json`. Windows: `build/installer.nsh`; macOS and Linux: `electron-builder.yml`.
+  - Development runs use a separate userData folder (`Meridian Room Editor (dev)`), so they don't share settings or the single-instance lock with an installed editor.
+- **Planned work** is in `TODO.md` (code signing, auto-updates through GitHub releases).
+- **Before committing:** `npm run check`.

@@ -1,0 +1,16 @@
+{
+  "name": "@meridian-editor/roomc",
+  "version": "0.0.0",
+  "private": true,
+  "license": "GPL-2.0-only",
+  "type": "module",
+  "bin": {
+    "roomc": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@meridian-editor/roo": "0.0.0"
+  }
+}

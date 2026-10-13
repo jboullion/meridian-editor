@@ -1,0 +1,89 @@
+# Packaging for the room editor, after the Shards desktop app (meridian-browser
+# apps/desktop/electron-builder.yml), with its logo (build/icon.png):
+#   npm run dist -w @meridian-editor/app    installers for this OS, in release/
+#   npm run pack -w @meridian-editor/app    an unpacked app in release/<os>-unpacked, for testing
+# The renderer (dist/renderer) and the main process and preload (out/) are bundled,
+# so no node_modules are packaged.
+
+appId: net.meridianshards.roomeditor
+productName: Meridian Room Editor
+copyright: Copyright © Meridian Shards contributors. Licensed under the GPL, version 2.
+
+directories:
+  # dist/ is the renderer build
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - dist/renderer/**
+  - "!**/*.map"
+  - build/icon.png
+  - package.json
+  - "!**/node_modules/**"
+extraResources:
+  - from: ../../LICENSE
+    to: LICENSE.txt
+npmRebuild: false
+asar: true
+
+# Turn off Electron features an editor never needs (running as plain Node, NODE_OPTIONS,
+# --inspect) and only load the signed-off app.asar, as Shards does.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Meridian-Room-Editor-Setup-${version}.${ext}
+
+# Opening rooms from the file manager. Systems go by a file's last extension, so a
+# room source (.room.json) is .json to them: the editor offers to open .json and .roo
+# files but never takes over .json. Windows: "Open with", from build/installer.nsh
+# (electron-builder's own fileAssociations would make the editor the .json default).
+nsis:
+  include: build/installer.nsh
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Meridian Room Editor
+  license: ../../LICENSE
+
+mac:
+  category: public.app-category.developer-tools
+  # An alternate handler: listed under Open With, never the default for .json.
+  fileAssociations:
+    - ext: [json, roo]
+      name: Meridian Room
+      role: Editor
+      rank: Alternate
+  target:
+    - target: dmg
+      arch: [universal]
+    - target: zip
+      arch: [universal]
+  artifactName: Meridian-Room-Editor-${version}-mac.${ext}
+
+linux:
+  category: Development
+  # MimeType in the .desktop file: offered for JSON, not made the default.
+  mimeTypes:
+    - application/json
+  synopsis: Meridian Room Editor, a room editor for Meridian 59
+  target:
+    - AppImage
+    - deb
+  artifactName: Meridian-Room-Editor-${version}-${arch}.${ext}
+  maintainer: Meridian Shards
+  # Our npm name starts with "@", so electron-builder would name the executable after it
+  executableName: meridian-room-editor
+
+deb:
+  packageName: meridian-room-editor

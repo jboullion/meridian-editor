@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "editor-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web", "-w", "@meridian-editor/app"],
+      "port": 5174,
+      "url": "http://127.0.0.1:5174"
+    }
+  ]
+}

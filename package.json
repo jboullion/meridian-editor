@@ -1,0 +1,41 @@
+{
+  "name": "meridian-editor",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A room editor for Meridian 59: text room sources compiled to .roo for the original server and Server 104.",
+  "license": "GPL-2.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "roomc": "node packages/roomc/src/cli.ts",
+    "shards:install": "node tools/shards/install.ts",
+    "shards:walk": "node tools/shards/walk.ts",
+    "shots": "node tools/screenshots/capture.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p apps/editor/tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "editor": "npm run dev -w @meridian-editor/app",
+    "editor:web": "npm run web -w @meridian-editor/app",
+    "editor:pack": "npm run pack -w @meridian-editor/app",
+    "editor:dist": "npm run dist -w @meridian-editor/app"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.4",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3"
+  }
+}

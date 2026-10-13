@@ -1,0 +1,10 @@
+{
+  "name": "@meridian-editor/roo",
+  "version": "0.0.0",
+  "private": true,
+  "license": "GPL-2.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

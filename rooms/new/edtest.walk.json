@@ -1,0 +1,23 @@
+{
+  "room": "edtest",
+  "steps": [
+    { "to": "3,2" },
+    { "to": "3,4", "why": "step up 16 onto the platform" },
+    { "to": "3,8", "why": "step down off the platform" },
+    { "to": "3,12", "expect": "blocked", "why": "the ledge is 64 up, more than a step" },
+    { "to": "3,9" },
+    { "to": "9,10" },
+    { "to": "9,13", "why": "onto the foot of the ramp" },
+    { "to": "4,13", "why": "up the sloped ramp onto the ledge" },
+    { "to": "9,13", "why": "back down the ramp" },
+    { "to": "9,10" },
+    { "to": "7,10" },
+    { "to": "7,6", "expect": "blocked", "why": "the pillar is solid" },
+    { "to": "9,9" },
+    { "to": "9,7" },
+    { "to": "9,2", "expect": "blocked", "why": "the tunnel's ceiling is 40, too low to walk under" },
+    { "to": "11,7" },
+    { "to": "11,8", "why": "the exit square" },
+    { "go": true, "why": "the exit leads to Tos" }
+  ]
+}

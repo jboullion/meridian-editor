@@ -1,0 +1,10 @@
+node_modules/
+dist/
+out/
+# Installers (electron-builder)
+release/
+*.tsbuildinfo
+# Compiled rooms are build output and art; never commit them (see AGENTS.md).
+*.roo
+*.ROO
+.env
