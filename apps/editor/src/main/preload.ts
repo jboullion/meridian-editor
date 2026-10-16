@@ -2,6 +2,7 @@
 // available, so this imports nothing else at run time.
 
 import { contextBridge, ipcRenderer } from "electron";
+import type { AgentCall } from "./agentProtocol.ts";
 import type { EditorBridge, MenuCommand, OpenedFile } from "./bridge.ts";
 
 const bridge: EditorBridge = {
@@ -29,6 +30,18 @@ const bridge: EditorBridge = {
     };
   },
   readyForFiles: () => ipcRenderer.send("file:ready"),
+  onAgentCall: (fn) => {
+    const listener = (_e: unknown, id: number, call: AgentCall): void => {
+      void fn(call).then(
+        (reply) => ipcRenderer.send("agent:reply", id, reply),
+        (e: unknown) => ipcRenderer.send("agent:reply", id, { ok: false, error: e instanceof Error ? e.message : String(e) }),
+      );
+    };
+    ipcRenderer.on("agent:call", listener);
+    return () => {
+      ipcRenderer.off("agent:call", listener);
+    };
+  },
   onMenu: (fn) => {
     const listener = (_e: unknown, command: MenuCommand): void => fn(command);
     ipcRenderer.on("menu", listener);

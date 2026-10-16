@@ -27,5 +27,11 @@
   - Files the system opens (argv, a second launch through the single-instance lock, macOS `open-file`) go to the page as `file:opened` once it says `file:ready`. In the renderer they go through `actions.ts openFromSystem`.
   - The association is "Open with" for `.json` and `.roo`, never the default. Windows has only last-extension associations, so `.room.json` is `.json`. Windows: `build/installer.nsh`; macOS and Linux: `electron-builder.yml`.
   - Development runs use a separate userData folder (`Meridian Room Editor (dev)`), so they don't share settings or the single-instance lock with an installed editor.
+- **Agent tools** (`packages/agent`): an MCP server (`npm run mcp`, `.mcp.json`) that runs the editor's ops headless for AI agents.
+  - Tools call the pure functions in `src/renderer/ops` (and `kod`, `preview/walker.ts`), never `commands.tsx`, whose commands open dialogs. So the renderer modules they import must stay free of the DOM and the store.
+  - A new command needs an entry in `packages/agent/src/coverage.ts`: the tools that do it, or why there are none. `coverage.test.ts` fails without one.
+  - `tools.test.ts` rebuilds `edtest` through the tools and expects `make-edtest.ts`'s output byte for byte.
+  - Kod writers (`kod_*`) touch only `rooms/new/<room>.kod`. `shards_install` needs `confirmed: true` each time (ask the user); `shards_walk` only ever logs in as `shardpal`.
+  - Live mode (`connect_editor`): the editor serves `src/main/agentEndpoint.ts` from the main process and from the Vite dev server (`scripts/agentApi.ts`); keep the two in step, like `host.ts`. The page answers in `src/renderer/agent.ts`; the calls are typed in `src/main/agentProtocol.ts`. Room logic stays in the agent: the page only reports its state and takes the edited room back as one undo step.
 - **Planned work** is in `TODO.md` (code signing, auto-updates through GitHub releases).
 - **Before committing:** `npm run check`.

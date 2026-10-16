@@ -1,6 +1,7 @@
 // Where files come from: the Electron bridge (window.editorHost) when running
 // in the app, or the Vite dev server's /api/rooms plus downloads in a browser.
 
+import type { AgentCall, AgentReply } from "../main/agentProtocol.ts";
 import type { EditorBridge, MenuCommand } from "../main/bridge.ts";
 
 export type { MenuCommand };
@@ -46,6 +47,8 @@ export interface Host {
   onMenu(fn: (command: MenuCommand) => void): () => void;
   /** Files the system asks the editor to open; the host holds them until this is set. */
   onOpenFile(fn: (file: OpenedFile) => void): () => void;
+  /** Calls from an agent (packages/agent), through the main process or the dev server. */
+  onAgentCall(fn: (call: AgentCall) => Promise<AgentReply>): () => void;
 }
 
 let texturesDir = "";
@@ -100,6 +103,7 @@ function electronHost(bridge: EditorBridge): Host {
       bridge.readyForFiles();
       return off;
     },
+    onAgentCall: (fn) => bridge.onAgentCall(fn),
   };
 }
 
@@ -172,6 +176,16 @@ function browserHost(): Host {
     setDirty: () => {},
     onMenu: () => () => {},
     onOpenFile: () => () => {},
+    onAgentCall: (fn) => {
+      // The dev server relays agents' calls over its HMR socket (scripts/agentApi.ts).
+      const hot = import.meta.hot;
+      if (!hot) return () => {};
+      const listener = (data: { id: number; call: AgentCall }): void => {
+        void fn(data.call).then((reply) => hot.send("meridian:agent-reply", { id: data.id, reply }));
+      };
+      hot.on("meridian:agent", listener);
+      return () => hot.off("meridian:agent", listener);
+    },
   };
 }
 

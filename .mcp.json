@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "meridian-editor": {
+      "command": "node",
+      "args": ["packages/agent/src/server.ts"]
+    }
+  }
+}

@@ -6,7 +6,7 @@ import type { RoomSource } from "@meridian-editor/roomc";
 import { exportRoo, newRoomDialog, openFile, save } from "./actions.ts";
 import { compiled } from "./compiler.ts";
 import { confirmDialog, promptForm, showDialog } from "./dialogs.tsx";
-import { kodCoords, roomBounds } from "./geometry.ts";
+import { kodCoords, roomBounds, roomBoxSize } from "./geometry.ts";
 import { host } from "./host.ts";
 import { checkCrossReferences, checkSectors, checkTextureNames, checkTextures, statistics, type CheckIssue } from "./ops/checks.ts";
 import { connectVertices, splitLinedefsAndSector } from "./ops/draw.ts";
@@ -464,6 +464,10 @@ function statsDialog(): void {
   if (!room) return;
   const file = compiled.get().result?.file;
   const rows = statistics(room);
+  // The room box is the room's size as Kod counts it; rooms can draw past it (Raza's forest).
+  const box = roomBoxSize(room);
+  const b = roomBounds(room);
+  const drawn = { width: (b.maxX - b.minX) / 64, height: (b.maxY - b.minY) / 64 };
   void showDialog(
     "Statistics",
     <dl className="stats wide">
@@ -481,13 +485,22 @@ function statsDialog(): void {
           </dd>
         </>
       )}
-      <dt>Room size</dt>
-      <dd>
-        {(() => {
-          const b = roomBounds(room);
-          return `${(b.maxX - b.minX) / 64} × ${(b.maxY - b.minY) / 64} squares`;
-        })()}
-      </dd>
+      {box && (
+        <>
+          <dt>Room box</dt>
+          <dd>
+            {box.width} × {box.height} squares
+          </dd>
+        </>
+      )}
+      {(!box || drawn.width !== box.width || drawn.height !== box.height) && (
+        <>
+          <dt>Drawn area</dt>
+          <dd>
+            {drawn.width} × {drawn.height} squares{box && ", past the room box"}
+          </dd>
+        </>
+      )}
     </dl>,
   );
 }

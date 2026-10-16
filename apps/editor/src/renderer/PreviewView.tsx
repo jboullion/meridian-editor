@@ -18,7 +18,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { FINENESS, type RooFile } from "@meridian-editor/roo";
 import { compiled } from "./compiler.ts";
-import { kodRoomLight, type KodRoomLight } from "./kod/kodRooms.ts";
+import { kodRoomLight, roomBox, type KodRoomLight } from "./kod/kodRooms.ts";
 import { dlightScale, isHighlight, lightColor } from "./kod/kodLights.ts";
 import { currentKodRoom, kod, roomLights, useKod, useKodRoom } from "./kod/kodStore.ts";
 import { gameLight, type GameLight } from "./preview/gameLight.ts";
@@ -27,6 +27,7 @@ import { toClientRoom, type Room } from "./preview/clientRoom.ts";
 import { EYE_HEIGHT, floorBase, Walker } from "./preview/walker.ts";
 import { stopWalk, useWalk, walk } from "./preview/walkStore.ts";
 import { buildRoomGeometry, type Batch } from "./preview/roomGeometry.ts";
+import { preview3d, type CaptureOptions } from "./preview/capture.ts";
 import { editor, selectOne, useEditor, type PreviewLight } from "./store.ts";
 import { parseBgf, type Bgf } from "./textures/bgf.ts";
 import { host as fileHost } from "./host.ts";
@@ -485,6 +486,71 @@ export function PreviewView(): React.JSX.Element {
       if (sector !== undefined && sector >= 0) selectOne({ kind: "sector", index: sector });
     };
 
+    // Pictures for agents (agent.ts render3d): one frame drawn now, from a camera,
+    // without disturbing the view.
+    preview3d.capture = async (o: CaptureOptions) => {
+      const notes: string[] = [];
+      const deadline = performance.now() + 20000;
+      // Wait for the open room's compile, and for the view to build it (textures load first).
+      for (;;) {
+        refresh();
+        const c = compiled.get();
+        const current = c.room === editor.get().room;
+        if (built && !pending && !c.busy && built.file === c.result?.file && (current || !c.ok)) {
+          if (!current) notes.push("The room doesn't compile right now; this is its last good compile.");
+          break;
+        }
+        if (performance.now() > deadline) throw new Error("The 3D view didn't finish building the room.");
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      const b = built!;
+      const size = new THREE.Vector2();
+      renderer.getSize(size);
+      const w = Math.round(o.width ?? (size.x || 960));
+      const h = Math.round(o.height ?? (size.y || 600));
+      const was = { position: camera.position.clone(), quaternion: camera.quaternion.clone(), fov: camera.fov, aspect: camera.aspect, target: controls.target.clone() };
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      const cam = o.camera ?? "current";
+      let eyeLevel = walking;
+      if (cam === "overview") {
+        fitCamera(b.file);
+        camera.fov = ORBIT_FOV;
+      } else if (cam !== "current") {
+        const things = editor.get().room?.things ?? [];
+        const box = roomBox(things);
+        if (!box || !clientRoom) throw new Error("The room has no room box to place a camera in.");
+        const cx = (cam.x - box.left) * 16;
+        const cy = (box.top - cam.y) * 16;
+        const floor = floorBase(clientRoom, cx, cy);
+        if (floor === null) notes.push("The camera isn't over a floor.");
+        const eye = (floor ?? 0) + (cam.height !== undefined ? cam.height * 16 : EYE_HEIGHT);
+        camera.position.set(cx / FINENESS, eye / FINENESS, cy / FINENESS);
+        // Compass degrees (0 north, 90 east) to client angles, (cos a, sin a) along x east, y south.
+        const a = ((cam.angle - 90) * Math.PI) / 180;
+        camera.rotation.set(((cam.pitch ?? 0) * Math.PI) / 180, Math.atan2(-Math.cos(a), -Math.sin(a)), 0, "YXZ");
+        const deg = Math.PI / 180;
+        const clientAspect = Math.tan((CLIENT_FOV.horizontal / 2) * deg) / Math.tan((CLIENT_FOV.vertical / 2) * deg);
+        camera.fov = camera.aspect >= clientAspect ? CLIENT_FOV.vertical : (2 * Math.atan(Math.tan((CLIENT_FOV.horizontal / 2) * deg) / camera.aspect)) / deg;
+        eyeLevel = true;
+      }
+      camera.updateProjectionMatrix();
+      const s = editor.get();
+      const showCeilings = s.ceilings || eyeLevel;
+      for (const m of b.meshes) m.mesh.visible = !m.batch.ceiling || showCeilings;
+      if (!showCeilings) notes.push("Ceilings are hidden, as in the orbit view.");
+      applyLight({ ...s.light, ...o.light });
+      renderer.render(scene, camera);
+      const url = renderer.domElement.toDataURL("image/png");
+      // Put the view back; the next frame redraws it.
+      camera.position.copy(was.position);
+      camera.quaternion.copy(was.quaternion);
+      camera.fov = was.fov;
+      controls.target.copy(was.target);
+      resize();
+      return { url, width: w, height: h, notes };
+    };
+
     const observer = new ResizeObserver(resize);
     observer.observe(host);
     renderer.domElement.addEventListener("pointerdown", onDown);
@@ -510,6 +576,7 @@ export function PreviewView(): React.JSX.Element {
     }
 
     return () => {
+      preview3d.capture = null;
       cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener("keydown", onKey, true);

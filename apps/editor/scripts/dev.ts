@@ -12,6 +12,8 @@ process.chdir(root);
 for (const mode of ["main", "preload"]) {
   await build({ configFile: resolve(root, "vite.main.config.ts"), mode, logLevel: "warn" });
 }
+// The Electron app takes agents' calls itself (main.ts), not the dev server.
+process.env.EDITOR_AGENT_WEB = "0";
 const server = await createServer({ configFile: resolve(root, "vite.config.ts") });
 await server.listen();
 const url = server.resolvedUrls?.local[0] ?? "http://127.0.0.1:5174/";

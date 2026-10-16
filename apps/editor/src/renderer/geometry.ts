@@ -3,7 +3,7 @@
 
 import type { RooFile } from "@meridian-editor/roo";
 import type { RoomSource } from "@meridian-editor/roomc";
-import type { ItemKind } from "./store.ts";
+import type { ItemKind } from "./ops/types.ts";
 
 export interface SectorPiece {
   /** 0-based sector. */
@@ -106,6 +106,14 @@ export function hitTest(
   return sector === null ? null : { kind: "sector", index: sector };
 }
 
+/** The room box (the first two things) in Kod squares: the room's size as Kod counts rows and columns. */
+export function roomBoxSize(room: RoomSource): { width: number; height: number } | null {
+  const [t0, t1] = room.things;
+  if (!t0 || !t1) return null;
+  return { width: Math.abs(t1.x - t0.x) / 64, height: Math.abs(t1.y - t0.y) / 64 };
+}
+
+/** Everything drawn plus the room box: what Fit frames. Rooms can draw past their box. */
 export function roomBounds(room: RoomSource): { minX: number; minY: number; maxX: number; maxY: number } {
   let minX = Infinity;
   let minY = Infinity;

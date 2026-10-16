@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PROFILES, type TargetName } from "@meridian-editor/roo";
 import { openEntry, openFromSystem } from "./actions.ts";
+import { handleAgentCall } from "./agent.ts";
 import { handleKey, runCommand, selectionCenter } from "./commands.tsx";
 import { useAutoCompile, useCompiled } from "./compiler.ts";
 import { CommandPalette, ContextMenu } from "./ContextMenu.tsx";
@@ -40,6 +41,7 @@ export function App(): React.JSX.Element {
     void reloadKod();
     const offMenu = host.onMenu((command) => runCommand(command));
     const offOpen = host.onOpenFile((file) => openFromSystem(file));
+    const offAgent = host.onAgentCall(handleAgentCall);
     const onKey = (e: KeyboardEvent): void => void handleKey(e);
     window.addEventListener("keydown", onKey);
     const beforeUnload = (e: BeforeUnloadEvent): void => {
@@ -49,6 +51,7 @@ export function App(): React.JSX.Element {
     return () => {
       offMenu();
       offOpen();
+      offAgent();
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("beforeunload", beforeUnload);
     };

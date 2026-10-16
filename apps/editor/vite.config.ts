@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
+import { agentApi } from "./scripts/agentApi.ts";
 import { roomsApi } from "./scripts/roomsApi.ts";
 
 // The renderer. `npm run web` serves it on its own (with /api/rooms standing in
@@ -8,7 +9,12 @@ import { roomsApi } from "./scripts/roomsApi.ts";
 export default defineConfig({
   root: resolve(import.meta.dirname, "src/renderer"),
   base: "./",
-  plugins: [react(), roomsApi(resolve(import.meta.dirname, "../../rooms"), resolve(import.meta.dirname, "../..")), contentSecurityPolicy()],
+  plugins: [
+    react(),
+    roomsApi(resolve(import.meta.dirname, "../../rooms"), resolve(import.meta.dirname, "../..")),
+    agentApi(resolve(import.meta.dirname, "../../rooms")),
+    contentSecurityPolicy(),
+  ],
   server: { host: "127.0.0.1", port: 5174, strictPort: true },
   build: {
     outDir: resolve(import.meta.dirname, "dist/renderer"),

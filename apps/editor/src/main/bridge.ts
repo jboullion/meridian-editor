@@ -1,6 +1,8 @@
 // The API the preload exposes to the page as window.editorHost. Types only, so
 // both the sandboxed preload and the renderer can import it.
 
+import type { AgentCall, AgentReply } from "./agentProtocol.ts";
+
 export interface OpenedFile {
   /** Absolute path. */
   path: string;
@@ -35,4 +37,6 @@ export interface EditorBridge {
   onOpenFile(fn: (file: OpenedFile) => void): () => void;
   /** The page is ready for files: the main process sends any it's holding. */
   readyForFiles(): void;
+  /** Calls from an agent (agentEndpoint.ts), answered by the page. */
+  onAgentCall(fn: (call: AgentCall) => Promise<AgentReply>): () => void;
 }

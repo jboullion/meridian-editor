@@ -14,9 +14,11 @@
   ],
   "scripts": {
     "roomc": "node packages/roomc/src/cli.ts",
+    "mcp": "node packages/agent/src/server.ts",
     "shards:install": "node tools/shards/install.ts",
     "shards:walk": "node tools/shards/walk.ts",
     "shots": "node tools/screenshots/capture.ts",
+    "shots:manual": "node tools/screenshots/capture.ts --set manual",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p apps/editor/tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

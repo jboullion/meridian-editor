@@ -4,6 +4,9 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstruc
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { PageCalls, startAgentEndpoint } from "./agentEndpoint.ts";
+import { EDITOR_DEV_DATA } from "./agentFiles.ts";
+import type { AgentReply } from "./agentProtocol.ts";
 import type { MenuCommand } from "./bridge.ts";
 import { readKodSources } from "./kod.ts";
 import { listRooms } from "./roomsFs.ts";
@@ -16,7 +19,7 @@ const devUrl = process.env.EDITOR_DEV_URL;
 // in Documents, and the folders chosen are remembered in settings.json in userData.
 const repoRoot = app.isPackaged ? "" : resolve(app.getAppPath(), "../..");
 // Development runs keep their own data (and single-instance lock), apart from an installed editor's.
-if (!app.isPackaged) app.setPath("userData", join(app.getPath("appData"), "Meridian Room Editor (dev)"));
+if (!app.isPackaged) app.setPath("userData", join(app.getPath("appData"), EDITOR_DEV_DATA));
 const settingsPath = join(app.getPath("userData"), "settings.json");
 const saved = loadSettings();
 let roomsDir = process.env.EDITOR_ROOMS_DIR ?? saved.roomsDir ?? (repoRoot ? join(repoRoot, "rooms") : join(app.getPath("documents"), "Meridian Rooms"));
@@ -109,6 +112,7 @@ function buildMenu(): void {
         item("Thing", "tool.thing"),
         { type: "separator" },
         item("Textures…", "textures.browse"),
+        item("Reload Texture Library", "textures.reload"),
       ],
     },
     {
@@ -128,6 +132,7 @@ function buildMenu(): void {
         item("Cross-References", "check.crossrefs"),
         item("Missing Textures", "check.textures"),
         item("Texture Names", "check.textureNames"),
+        item("Kod Placements", "check.kod"),
         { type: "separator" },
         item("All Checks", "check.all", "F9"),
       ],
@@ -141,6 +146,15 @@ function buildMenu(): void {
         { type: "separator" },
         item("Fit Room", "view.fit"),
         item("Center on Selection", "view.center"),
+        item("Show Grid", "view.toggleGrid"),
+        item("Snap to Grid", "view.toggleSnap"),
+        { type: "separator" },
+        item("Walk in 3D", "view.walk"),
+        item("Lighting…", "view.lighting"),
+        item("Flat Lighting", "view.flatLight"),
+        { type: "separator" },
+        item("Show Kod Placements", "view.kod"),
+        item("Reload Kod", "view.kodReload"),
         { type: "separator" },
         { role: "reload" },
         { role: "toggleDevTools" },
@@ -215,6 +229,7 @@ function registerIpc(): void {
     pageReady = true;
     for (const f of waiting.splice(0)) void openPath(f);
   });
+  ipcMain.on("agent:reply", (_e, id: number, reply: AgentReply) => agentCalls.settle(id, reply));
   ipcMain.on("window:title", (_e, title: string) => win?.setTitle(title));
   ipcMain.on("window:dirty", (_e, value: boolean) => {
     dirty = value;
@@ -294,6 +309,34 @@ async function openPath(path: string): Promise<void> {
   }
 }
 
+// Agents (packages/agent) reach the open room through a local endpoint; its
+// address and token go in agent.json in userData while the editor runs.
+const agentCalls = new PageCalls();
+let agentEndpoint: { close(): void } | null = null;
+
+async function startAgents(): Promise<void> {
+  agentEndpoint = await startAgentEndpoint({
+    kind: "electron",
+    file: join(app.getPath("userData"), "agent.json"),
+    roomsDir: () => roomsDir,
+    toId: (abs) => abs,
+    fromId: (id) => id,
+    toPage: (call) =>
+      agentCalls.send((id) => {
+        if (!win || !pageReady) return false;
+        win.webContents.send("agent:call", id, call);
+        return true;
+      }),
+    local: (call) => (call.op === "screenshot" ? screenshot() : null),
+  });
+}
+
+async function screenshot(): Promise<AgentReply> {
+  if (!win) return { ok: false, error: "The editor has no window." };
+  const image = await win.webContents.capturePage();
+  return { ok: true, value: { png: image.toPNG().toString("base64"), size: image.getSize() } };
+}
+
 // One editor at a time: a second launch hands its files to this one and leaves.
 if (!app.requestSingleInstanceLock()) app.exit(0);
 app.on("second-instance", (_e, argv) => {
@@ -319,10 +362,13 @@ void app.whenReady().then(() => {
   buildMenu();
   registerIpc();
   createWindow();
+  startAgents().catch((e: unknown) => console.error("agent endpoint:", e));
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on("will-quit", () => agentEndpoint?.close());
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

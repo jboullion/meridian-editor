@@ -20,3 +20,11 @@ The editor already builds installers with electron-builder (`npm run editor:dist
 ## Shards
 
 - [ ] **The room build step in meridian-browser** (ADR 0001 decision 6): room sources committed there, and `tools/assets/build-assets.ts` running `roomc` to make the `.roo` files.
+
+## Agent tools (MCP)
+
+`packages/agent` is done through the plan (ADR 0002). Follow-ups:
+
+- [ ] **The editor reads new rooms' Kod.** The agent's tools read `rooms/new/<room>.kod` ahead of the server's copy; the editor's map and Kod tab only see it once `shards:install` has copied it into the server's tree.
+- [ ] **`render_3d` without the editor**, through the web build in Playwright (as `tools/screenshots` does), for agents working on files.
+- [ ] **Undo labels in the editor's history.** The status bar names each agent step, but the undo stack doesn't keep labels.

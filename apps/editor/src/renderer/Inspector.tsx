@@ -7,7 +7,7 @@ import type { RoomSource, SourceSector, SourceSide, SourceSlope, SourceThing } f
 import { runCommand } from "./commands.tsx";
 import { useCompiled } from "./compiler.ts";
 import { bits, Check, Choice, common, hex, NumberField, SCROLL_DIRECTIONS, SCROLL_SPEEDS, Section } from "./fields.tsx";
-import { kodCoords } from "./geometry.ts";
+import { kodCoords, roomBoxSize } from "./geometry.ts";
 import { moveItems, sectorVertices, THING_TYPES } from "./ops/edit.ts";
 import { TextureField } from "./textures/TexturePicker.tsx";
 import { edit, selectOne, useEditor, type ItemKind } from "./store.ts";
@@ -42,7 +42,7 @@ function OperationsHint({ kind }: { kind: ItemKind }): React.JSX.Element {
 function RoomPanel({ room }: { room: RoomSource }): React.JSX.Element {
   const target = useEditor((s) => s.target);
   const file = useCompiled((s) => s.result?.file);
-  const [t0, t1] = room.things;
+  const size = roomBoxSize(room);
   return (
     <>
       <Section title="Room">
@@ -56,11 +56,11 @@ function RoomPanel({ room }: { room: RoomSource }): React.JSX.Element {
           <dd>{room.sectors.length}</dd>
           <dt>Things</dt>
           <dd>{room.things.length}</dd>
-          {t0 && t1 && (
+          {size && (
             <>
               <dt>Size</dt>
               <dd>
-                {Math.abs(t1.x - t0.x) / 64} × {Math.abs(t1.y - t0.y) / 64} squares
+                {size.width} × {size.height} squares
               </dd>
             </>
           )}

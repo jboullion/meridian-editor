@@ -40,7 +40,7 @@ export type Inflate = (data: Uint8Array) => Promise<Uint8Array>;
 
 /** zlib (RFC 1950) inflate with the platform DecompressionStream (browsers and Node 18+). */
 export const inflateZlib: Inflate = async (data) => {
-  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate"));
+  const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 };
 
