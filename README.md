@@ -171,7 +171,16 @@ npm run shards:install -- edtest
 npm run shards:walk -- edtest
 ```
 
-- **install:**
+- **install, for a Shards room** (its source in shards-server's `resource/rooms/src`, its Kod class in shards-server's room tree):
+  - It puts the geometry in the game, as Save does.
+  - If the server doesn't have the room yet:
+    - it checks that the class is registered: its `.bof` in the room makefile, its `RID_` in `blakston.khd`, and a `CreateOneRoomIfNew` line in `system.kod`;
+    - then it builds the Kod;
+    - then it asks before `reload system`, which saves the game (`--yes` skips the question);
+    - then it creates the room and rebuilds the assets.
+  - Reload the game's page afterwards: `rsc0000.rsb` changed.
+  - The Proving Grounds (`provgrnd`, RID 4300, Shards' admin test room) was made this way. `tools/shards/make-provgrnd.ts` draws it with the editor's operations.
+- **install, for the editor's own `rooms/new/<room>`** (edtest):
   - Compiles `rooms/new/<room>.room.json` for 104.
   - Copies the `.roo` to the server's `rooms` folder and to `dist/assets`, listed in the manifest.
   - Creates the room on the running server, or recreates it so it loads the new file.
