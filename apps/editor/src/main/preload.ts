@@ -19,6 +19,7 @@ const bridge: EditorBridge = {
   readTexture: (dir, name) => ipcRenderer.invoke("textures:read", dir, name),
   readResource: (dir, name) => ipcRenderer.invoke("textures:read-resource", dir, name),
   readKod: (dir) => ipcRenderer.invoke("kod:read", dir),
+  installRoom: (path, text) => ipcRenderer.invoke("shards:install", path, text),
   chooseFolder: (title, defaultPath) => ipcRenderer.invoke("dialog:choose-folder", title, defaultPath),
   setTitle: (title) => ipcRenderer.send("window:title", title),
   setDirty: (dirty) => ipcRenderer.send("window:dirty", dirty),

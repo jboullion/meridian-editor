@@ -141,6 +141,24 @@ npm run editor:pack
   - A room opens in the running editor if there is one. A `.roo` is imported, as with File → Open.
 - The version is `apps/editor/package.json`'s. Code signing and auto-updates (through GitHub releases) are planned: see [TODO.md](TODO.md).
 
+## Editing Shards' rooms live
+
+Run the Shards stack (`npm run dev -- --editor` in meridian-browser starts this editor's web build with it), or this editor with `npm run editor`. Then:
+
+1. **In the game,** an admin opens the admin console (Shift+4, or the ☰ menu). On the Travel tab, **Edit this room** opens the room they're standing in, here.
+   - It's in development builds only.
+   - The game's dev server finds this editor through its agent endpoint (`agent.json` / `agent-web.json`). It won't replace a room with unsaved changes.
+2. **Save (Ctrl+S)** a Shards room, one whose source is in `resource/rooms/src`, and it goes into the game (`apps/editor/src/main/shardsInstall.ts`):
+   - it's compiled for 104;
+   - the `.roo` is written beside its source in shards-server (committed there), to the server's run folder, and to meridian-browser's `dist/assets` with its manifest entry;
+   - the running blakserv rebuilds every room built from that file (`room.kod Recreate`; tos.roo is several), found through the Kod. Anyone inside is put back where they stood.
+3. **The game** sees the new room checksum and loads the room again in place, with no reload or logout.
+
+- The status bar says what happened, for example "Installed razainn.roo and rebuilt RID 301 on the server (1717 ms)".
+- Preferences can turn this off ("Saving a Shards room puts it in the game").
+- Only geometry is installed this way. A new room, or a change to its Kod, still goes through `npm run shards:install` below, which builds and reloads the Kod (that saves the game).
+- `npm run start` runs the last build (`out/`). After pulling or changing the editor, use `npm run editor`, or build again.
+
 ## Testing rooms in Shards
 
 `tools/shards` puts a room from `rooms/new` on the local Shards stack (meridian-browser beside this repo, or `MERIDIAN_BROWSER`) and walks it. It needs blakserv and the gateway running (`npm run dev` there).

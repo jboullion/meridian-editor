@@ -6,6 +6,7 @@ import { compileOnce } from "./compiler.ts";
 import { promptForm } from "./dialogs.tsx";
 import { newRoom, newRoomWithFloor } from "./ops/edit.ts";
 import { host, type RoomEntry, type OpenedFile } from "./host.ts";
+import { installAfterSave } from "./shardsInstall.ts";
 import { editor, isDirty, loadRoom, notify } from "./store.ts";
 
 const ROOM_SUFFIX = /\.room\.json$|\.json$/i;
@@ -65,6 +66,7 @@ export async function save(as = false): Promise<boolean> {
       await host.writeRoom(doc.id, text);
       editor.set({ saved: room });
       notify(`Saved ${doc.name}`);
+      void installAfterSave(doc.id, text);
       return true;
     }
     const where = await host.saveRoomAs(`${doc.name}.room.json`, text);

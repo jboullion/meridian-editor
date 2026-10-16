@@ -2,6 +2,7 @@
 // both the sandboxed preload and the renderer can import it.
 
 import type { AgentCall, AgentReply } from "./agentProtocol.ts";
+import type { InstallResult } from "./shardsInstall.ts";
 
 export interface OpenedFile {
   /** Absolute path. */
@@ -37,6 +38,8 @@ export interface EditorBridge {
   onOpenFile(fn: (file: OpenedFile) => void): () => void;
   /** The page is ready for files: the main process sends any it's holding. */
   readyForFiles(): void;
+  /** Puts a saved Shards room in the game (shardsInstall.ts); null if `path` isn't one of Shards' rooms. */
+  installRoom(path: string, text: string): Promise<InstallResult | null>;
   /** Calls from an agent (agentEndpoint.ts), answered by the page. */
   onAgentCall(fn: (call: AgentCall) => Promise<AgentReply>): () => void;
 }

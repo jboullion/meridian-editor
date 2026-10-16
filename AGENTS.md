@@ -18,6 +18,11 @@
 - **Preview lighting** (`src/renderer/preview/lighting.ts`, `gameLight.ts`): the shader ports meridian-browser's `packages/render/src/lighting.ts` (without enhanced lighting or light sources). The light values at a game hour follow the server's Kod; `kodRoomLight` reads a class's light properties through its parents. Keep the formulas in step with both.
 - **Light sources** (`src/renderer/kod/kodLights.ts`): what each placed object's `SendLightingInformation` would send, worked out from Kod (flickerer classes, ornaments, signs, news globes). The host reads those object files (`src/main/kod.ts LIGHT_OBJECTS`). The shader's light maps follow meridian-browser's `lighting.ts`.
 - **Kod placements** (`src/renderer/kod`): `kodRooms.ts` parses the server's room classes (exits, generators, `NewHold`, ornament lists, sounds) with regexes, read-only. The Kod comes from the host (`readKod`, `src/main/kod.ts`), like textures.
+- **Install on save** (`src/main/shardsInstall.ts`, `src/renderer/shardsInstall.ts`):
+  - Saving a room whose source is in Shards' rooms folder compiles it and writes the `.roo` to shards-server's `resource/rooms`, the run folder and `dist/assets`.
+  - It then has blakserv `Recreate` every room the Kod builds from that file.
+  - The Electron bridge (`shards:install`) and the web build's `POST /api/shards/install` both call it. `src/main/shardsServer.ts` holds the maintenance port and manifest helpers, shared with `tools/shards`.
+  - The game's admin console opens rooms here through the agent endpoint's `load` (meridian-browser `tools/dev/devTools.ts`), so keep `load` working for it.
 - **Testing in Shards** (`tools/shards`): `shards:install` puts a room on the local Shards server; `shards:walk` walks it.
   - It writes into shards-server (Kod, the room makefile, the run folder) and meridian-browser's git-ignored `dist/assets`. The shards-server changes are tracked there; the user commits them.
   - A Kod change runs `reload system`, which saves the game.

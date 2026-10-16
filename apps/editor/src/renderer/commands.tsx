@@ -42,6 +42,7 @@ import { knownTextures, reloadLibrary, textureWidth } from "./textures/library.t
 import { checkKodPlacements } from "./kod/kodChecks.ts";
 import { currentKodRoom, kod, reloadKod } from "./kod/kodStore.ts";
 import { editorToClient, startWalk, stopWalk, walk } from "./preview/walkStore.ts";
+import { installOnSave, setInstallOnSave } from "./shardsInstall.ts";
 import {
   count,
   cursor,
@@ -428,10 +429,11 @@ export async function preferencesDialog(): Promise<void> {
         ],
       },
       { key: "pillar", label: "Shapes inside a sector make solid pillars (roomedit) instead of inner sectors", type: "checkbox" },
-      { key: "texturesDir", label: "Textures folder (grdNNNNN.bgf); empty for the installed client", type: "text" },
-      { key: "kodDir", label: "Kod folder (room classes and blakston.khd); empty for meridian-browser/server/src/kod", type: "text" },
+      { key: "texturesDir", label: "Textures folder (grdNNNNN.bgf); empty for the Shards game files, else the installed client", type: "text" },
+      { key: "kodDir", label: "Kod folder (room classes and blakston.khd); empty for the Shards server's", type: "text" },
+      { key: "installOnSave", label: "Saving a Shards room puts it in the game: compiled, copied to the server and the game files, and rebuilt on the running server", type: "checkbox" },
     ],
-    { ...d, polygonSides: p.polygonSides, torchAngle: p.torchAngle, pillar: p.pillar, texturesDir: p.texturesDir, kodDir: p.kodDir },
+    { ...d, polygonSides: p.polygonSides, torchAngle: p.torchAngle, pillar: p.pillar, texturesDir: p.texturesDir, kodDir: p.kodDir, installOnSave: installOnSave() },
     "Save",
     "roomedit's defaults are no textures, floor 0, ceiling 64 and light 128.",
   );
@@ -457,6 +459,7 @@ export async function preferencesDialog(): Promise<void> {
   });
   if (String(v.texturesDir ?? "").trim() !== p.texturesDir) void reloadLibrary();
   if (String(v.kodDir ?? "").trim() !== p.kodDir) void reloadKod();
+  setInstallOnSave(!!v.installOnSave);
 }
 
 function statsDialog(): void {

@@ -1,13 +1,15 @@
 // Dev-server stand-in for the Electron bridge, so the UI also runs in a plain
 // browser: GET /api/rooms lists the rooms folder, GET/PUT /api/rooms/file?path=
 // reads and writes one room source, /api/textures serves the texture library and
-// /api/kod the server's room Kod. Bound to 127.0.0.1 by vite.config.ts.
+// /api/kod the server's room Kod, and POST /api/shards/install?path= puts a saved
+// Shards room in the game (shardsInstall.ts). Bound to 127.0.0.1 by vite.config.ts.
 
 import { readFile, writeFile } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import type { Plugin } from "vite";
 import { readKodSources } from "../src/main/kod.ts";
 import { listRooms, resolveInside } from "../src/main/roomsFs.ts";
+import { installRoom, isShardsRoom } from "../src/main/shardsInstall.ts";
 import { listTextures, readResource, readTexture } from "../src/main/textures.ts";
 
 export function roomsApi(dir: string, repoRoot: string): Plugin {
@@ -41,6 +43,18 @@ export function roomsApi(dir: string, repoRoot: string): Plugin {
               res.setHeader("Content-Type", "application/octet-stream");
               res.end(bytes);
             } else send(res, 404, "not found", "text/plain");
+          } catch (e) {
+            send(res, 500, (e as Error).message, "text/plain");
+          }
+        })();
+      });
+      server.middlewares.use("/api/shards/install", (req, res) => {
+        void (async () => {
+          try {
+            if (req.method !== "POST") return send(res, 405, "method not allowed", "text/plain");
+            const abs = resolveInside(dir, new URL(req.url ?? "/", "http://localhost").searchParams.get("path") ?? "");
+            const result = isShardsRoom(repoRoot, abs) ? await installRoom(repoRoot, abs, await body(req)) : null;
+            send(res, 200, JSON.stringify(result), "application/json");
           } catch (e) {
             send(res, 500, (e as Error).message, "text/plain");
           }
