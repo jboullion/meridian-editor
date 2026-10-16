@@ -1,7 +1,7 @@
 # Agent notes
 
-- **Never commit `.roo` files.** They are build output and game art. Room sources (`.room.json`) are what gets committed, in the Shards repo (meridian-browser), not here. See ADR 0001.
-- **Local rooms:** `rooms/104/` is a git-ignored copy of meridian-browser's server rooms, and `rooms/src/` holds their sources. Work there; don't edit meridian-browser's room files yet.
+- **Never commit `.roo` files here.** They are build output and game art. Shards' rooms live in the shards-server repository (reached through meridian-browser's `server/src` junction): sources in `resource/rooms/src/*.room.json`, compiled files beside them in `resource/rooms/*.roo`, both committed there. See docs/0001-room-editor.md decision 6.
+- **Where things are** (`apps/editor/src/main/shardsPaths.ts`): that rooms folder is the editor's default, the Kod is shards-server's `kod`, and textures and sprites come from meridian-browser's `dist/assets` (what our clients get), else the installed 104 client. `MERIDIAN_BROWSER`, `SHARDS_SERVER` and `SHARDS_ASSETS` override them. `packages/roomc/test/shardsRooms.test.ts` checks that every source compiles to the `.roo` beside it; `d6e6ulake` has no source (its slopes don't recompile exactly).
 - **New rooms** go in `rooms/new/`: `<room>.room.json`, its Kod class `<room>.kod`, and a walk test `<room>.walk.json`. `edtest` (RID 4200) is the editor's test room, made by `tools/shards/make-edtest.ts`.
 - **The reference trees are read-only:** `meridian-unreal/ReferenceServers/MeridianSteam/Meridian59` (original) and `.../Server-104`. Cite them as `o:` and `s:` paths.
 - **Port, don't redesign.** `packages/roomc/src/bsp.ts`, `grids.ts`, `slope.ts` and `compile.ts` follow roomedit's C line by line, including list order, float vs double and C rounding. Byte-for-byte output against the shipped rooms is the test. Run `npm run check` after touching them.
@@ -19,7 +19,7 @@
 - **Light sources** (`src/renderer/kod/kodLights.ts`): what each placed object's `SendLightingInformation` would send, worked out from Kod (flickerer classes, ornaments, signs, news globes). The host reads those object files (`src/main/kod.ts LIGHT_OBJECTS`). The shader's light maps follow meridian-browser's `lighting.ts`.
 - **Kod placements** (`src/renderer/kod`): `kodRooms.ts` parses the server's room classes (exits, generators, `NewHold`, ornament lists, sounds) with regexes, read-only. The Kod comes from the host (`readKod`, `src/main/kod.ts`), like textures.
 - **Testing in Shards** (`tools/shards`): `shards:install` puts a room on the local Shards server; `shards:walk` walks it.
-  - It writes only git-ignored paths in meridian-browser: `server/src/...` and `dist/assets`.
+  - It writes into shards-server (Kod, the room makefile, the run folder) and meridian-browser's git-ignored `dist/assets`. The shards-server changes are tracked there; the user commits them.
   - A Kod change runs `reload system`, which saves the game.
   - Test with `shardpal`, never an account someone is playing (`who` on the maintenance port shows them). The user often plays on the local server.
   - The 104 server doesn't check players against walls, steps or ceilings; the client does (`move.c`). So the walk test drives Shards' `PlayerMover`, and a missing server snap-back proves nothing.

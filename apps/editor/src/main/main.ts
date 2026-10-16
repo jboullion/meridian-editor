@@ -10,19 +10,20 @@ import type { AgentReply } from "./agentProtocol.ts";
 import type { MenuCommand } from "./bridge.ts";
 import { readKodSources } from "./kod.ts";
 import { listRooms } from "./roomsFs.ts";
+import { defaultRoomsDir } from "./shardsPaths.ts";
 import { listTextures, readResource, readTexture } from "./textures.ts";
 
 const devUrl = process.env.EDITOR_DEV_URL;
-// In development the app path is apps/editor and the working rooms live at the repo
-// root (rooms/src for the shipped rooms' sources, rooms/new for new ones), with the
-// Shards repo (its Kod) beside it. Installed, there's no repo: rooms default to a folder
+// In development the app path is apps/editor, and the rooms are the Shards server's room
+// sources (shards-server's resource/rooms/src, through meridian-browser beside this repo:
+// shardsPaths.ts), or this repo's rooms/ without it. Installed, there's no repo: rooms default to a folder
 // in Documents, and the folders chosen are remembered in settings.json in userData.
 const repoRoot = app.isPackaged ? "" : resolve(app.getAppPath(), "../..");
 // Development runs keep their own data (and single-instance lock), apart from an installed editor's.
 if (!app.isPackaged) app.setPath("userData", join(app.getPath("appData"), EDITOR_DEV_DATA));
 const settingsPath = join(app.getPath("userData"), "settings.json");
 const saved = loadSettings();
-let roomsDir = process.env.EDITOR_ROOMS_DIR ?? saved.roomsDir ?? (repoRoot ? join(repoRoot, "rooms") : join(app.getPath("documents"), "Meridian Rooms"));
+let roomsDir = process.env.EDITOR_ROOMS_DIR ?? saved.roomsDir ?? (repoRoot ? defaultRoomsDir(repoRoot) : join(app.getPath("documents"), "Meridian Rooms"));
 let exportDir = saved.exportDir ?? (repoRoot ? join(repoRoot, "rooms", "out") : roomsDir);
 let win: BrowserWindow | null = null;
 let dirty = false;
@@ -218,9 +219,9 @@ function registerIpc(): void {
     return result.filePath;
   });
   ipcMain.handle("kod:read", (_e, dir: string) => readKodSources(dir, repoRoot));
-  ipcMain.handle("textures:list", (_e, dir: string) => listTextures(dir));
-  ipcMain.handle("textures:read", (_e, dir: string, name: string) => readTexture(dir, name));
-  ipcMain.handle("textures:read-resource", (_e, dir: string, name: string) => readResource(dir, name));
+  ipcMain.handle("textures:list", (_e, dir: string) => listTextures(dir, repoRoot));
+  ipcMain.handle("textures:read", (_e, dir: string, name: string) => readTexture(dir, name, repoRoot));
+  ipcMain.handle("textures:read-resource", (_e, dir: string, name: string) => readResource(dir, name, repoRoot));
   ipcMain.handle("dialog:choose-folder", async (_e, title: string, defaultPath: string) => {
     const result = await dialog.showOpenDialog(win!, { title, defaultPath: defaultPath || undefined, properties: ["openDirectory"] });
     return result.canceled ? null : (result.filePaths[0] ?? null);

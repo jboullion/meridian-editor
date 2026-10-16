@@ -97,6 +97,7 @@ So a step or a low ceiling with an untextured face can be walked straight throug
 6. **Sources for rooms we author are committed in the Shards repo (meridian-browser); compiled `.roo` files are not.** Its asset build (`tools/assets/build-assets.ts`) runs `roomc`, and the rooms are served like other art.
    - The `rooms/src/` layout and the build step are decided when the first Shards room exists.
    - 104's shipped `.roo` files stay as they are. Imported rooms are committed as sources only once we change them.
+   - Changed 2026-10-15: Shards' server is now our fork, the shards-server repository. Every room's source is committed there, in `resource/rooms/src/` (all 357 that recompile byte for byte), with the compiled `.roo` beside it in `resource/rooms/`, which the server build already copies. Saving or installing a room writes both; a test checks they match. No `roomc` step in meridian-browser's asset build is needed: it copies the server's rooms.
 
 ## Consequences
 

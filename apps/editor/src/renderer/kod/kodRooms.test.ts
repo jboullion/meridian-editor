@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
+import { shardsPaths } from "../../main/shardsPaths.ts";
 import { buildKodIndex, kodCandidates, kodToEditor, parseKodRoom } from "./kodRooms.ts";
 
 const SAMPLE = `
@@ -94,8 +95,9 @@ describe("Kod room classes", () => {
   });
 });
 
-const KOD = process.env.KOD_DIR ?? "E:/2026_Experiments/meridian-browser/server/src/kod";
-const ROOMS = "E:/2026_Experiments/meridian-editor/rooms/104";
+const SHARDS = shardsPaths(join(import.meta.dirname, "../../../../.."));
+const KOD = process.env.KOD_DIR ?? SHARDS?.kod ?? "";
+const ROOMS = SHARDS?.roo ?? "";
 
 describe.skipIf(!existsSync(join(KOD, "include", "blakston.khd")))("the server's Kod", () => {
   const files: { path: string; text: string }[] = [];

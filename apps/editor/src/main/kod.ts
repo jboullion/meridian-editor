@@ -1,12 +1,13 @@
 // The server's Kod source, for showing where a room's Kod puts things. Reads
 // the room classes (object/active/holder/room/**.kod) and the RID constants
-// (include/blakston.khd). By default the Shards server's copy beside this repo:
-// meridian-browser/server/src/kod. Shared by the Electron main process and the
+// (include/blakston.khd). By default the Shards server's (shardsPaths.ts: shards-server's
+// kod, through meridian-browser/server/src). Shared by the Electron main process and the
 // Vite dev server's /api/kod.
 
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { join, relative, sep } from "node:path";
+import { shardsPaths } from "./shardsPaths.ts";
 
 const ROOM_CLASSES = join("object", "active", "holder", "room");
 const KHD = join("include", "blakston.khd");
@@ -14,7 +15,7 @@ const KHD = join("include", "blakston.khd");
 /** `repoRoot` is this repo's root; the Shards repo is expected beside it. */
 export function defaultKodDir(repoRoot: string): string {
   // Installed (no repo), only EDITOR_KOD_DIR or the folder set in Preferences.
-  const candidates = [process.env.EDITOR_KOD_DIR, repoRoot && resolve(repoRoot, "..", "meridian-browser", "server", "src", "kod")].filter((d): d is string => !!d);
+  const candidates = [process.env.EDITOR_KOD_DIR, shardsPaths(repoRoot)?.kod].filter((d): d is string => !!d);
   return candidates.find((d) => existsSync(join(d, KHD))) ?? "";
 }
 

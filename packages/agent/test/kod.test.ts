@@ -79,7 +79,7 @@ describe.skipIf(!defaultKodDir(REPO))("Kod tools", () => {
   });
 });
 
-describe.skipIf(!defaultTexturesDir())("texture tools", () => {
+describe.skipIf(!defaultTexturesDir(REPO))("texture tools", () => {
   it("list, look at and find textures", async () => {
     const s = new HeadlessSession(join(REPO, "rooms"), REPO);
     await call(s, "open_room", { path: "new/edtest.room.json" });

@@ -34,7 +34,7 @@ How it works:
 - **Operations:** right-click the map for the current mode's roomedit operations, or press Ctrl+Shift+P for every command. They're also in the menus.
 - **Inspector:** every field of the selection. With several items selected, a change applies to all of them, and fields where they differ show "mixed". Texture fields have thumbnails and open the texture picker.
 - **Checks** (F9): roomedit's sector, cross-reference and texture checks. Results link to the problem, and some come with a Fix button.
-- **Textures:** `grdNNNNN.bgf` from the installed Meridian 104 client (`%LOCALAPPDATA%\Meridian-104\resource`), or a folder set in Preferences.
+- **Textures:** `grdNNNNN.bgf` from Shards' asset build (`meridian-browser/dist/assets`, what our clients get), else the installed Meridian 104 client (`%LOCALAPPDATA%\Meridian-104\resource`), or a folder set in Preferences.
 - **Map display:** sectors are shaded by floor height, ceiling height or light, using the live compiled BSP. The status bar shows the cursor's Kod row and column.
 - **Kod placements** (K toggles them on the map), read-only, from the room's class in the server's Kod:
   - What's shown:
@@ -48,7 +48,7 @@ How it works:
   - *Check Kod placements* (also part of F9) flags placements outside the room box or where there's no floor. Moving the room box corners or walls is the usual cause.
   - *Copy Kod position here* (right-click) copies `#new_row=…,#new_col=…,#fine_row=…,#fine_col=…` for pasting into Kod.
   - The class is found by the room's `.roo` name, or by its room ID. When several classes share one `.roo` (`tos.roo`), the tab lets you pick.
-  - The Kod comes from `meridian-browser/server/src/kod` beside this repo, or the folder set in Preferences.
+  - The Kod comes from the Shards server (shards-server's `kod`, through `meridian-browser/server/src` beside this repo), or the folder set in Preferences.
 - **3D preview:** textured the way the client draws rooms, using the client's own wall, floor and ceiling extraction (`d3drender.c`, through meridian-browser's port).
   - Texture offsets, top-down/bottom-up, no-vtile, backwards, slopes, bowties, see-through walls, and scrolling and cycling animations all work.
   - Faces with no texture show a grey checker; open sky has no ceiling.
@@ -159,10 +159,10 @@ npm run shards:walk -- edtest
   - Creates the room on the running server, or recreates it so it loads the new file.
   - The first time, or when the `.kod` changed, it also:
     - copies `rooms/new/<room>.kod` into the server's Kod tree;
-    - builds the Kod (`serveruild.cmd Bkod`);
+    - builds the Kod (`server\build.cmd Bkod`);
     - reloads it (`reload system`, which saves the game first);
     - rebuilds the assets, so clients get the new `rsc0000.rsb`.
-  - Everything it writes in meridian-browser is git-ignored.
+  - It writes into shards-server (the Kod, the room makefile, the run folder), where changes are tracked for you to commit, and into meridian-browser's git-ignored `dist/assets`.
 - **walk:**
   - Logs in as `shardpal` through the gateway, using meridian-browser's protocol code. Use an account nobody is playing, since logging in takes over its session.
   - Has the server teleport the character into the room, and checks that the server's checksum matches the compiled file.
@@ -242,15 +242,13 @@ npm run roomc -- verify room.roo
 
 ## Rooms
 
-- **`rooms/104/`:** a local copy of Shards' server rooms, from `meridian-browser/server/src/resource/rooms`.
-  - 362 rooms, plus `mark/` (8) and `unused/` (12).
-  - Identical to Server 104's shipped set.
-  - Like every `.roo`, they are git-ignored.
-- **`rooms/src/`:** the same 382 rooms as editable sources, from `roomc import -d`. All but `d6e6ulake` recompile byte for byte.
+- **Shards' rooms** live in the shards-server repository, which meridian-browser's `server/src` links to (`apps/editor/src/main/shardsPaths.ts`; `MERIDIAN_BROWSER` or `SHARDS_SERVER` to move it):
+  - `resource/rooms/src/*.room.json` holds the sources: 357 rooms from `roomc import -d`. It's the editor's default folder.
+  - `resource/rooms/*.roo` holds the compiled rooms, committed beside them. The server build copies these to its run folder.
+  - `packages/roomc/test/shardsRooms.test.ts` checks that each source compiles to its `.roo` byte for byte.
+  - `d6e6ulake` has no source, since its slopes can't be reproduced.
 - **`rooms/new/`:** rooms made here, each with its Kod class (`.kod`) and a walk test (`.walk.json`). `edtest` is the editor's test room.
 - **`rooms/out/`:** where the editor exports compiled rooms by default.
-
-Edit here rather than meridian-browser's files until its room build step exists.
 
 ## Development
 

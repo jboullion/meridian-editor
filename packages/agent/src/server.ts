@@ -5,10 +5,11 @@
 //   node packages/agent/src/server.ts [--rooms <dir>]
 //
 // It starts headless, on room files: one room open at a time, with undo, in
-// this process. Rooms default to rooms/ in this repo (or EDITOR_ROOMS_DIR).
+// this process. Rooms default to Shards' room sources (shardsPaths.ts), else rooms/
+// in this repo (or EDITOR_ROOMS_DIR).
 // connect_editor switches to the room open in a running editor (live.ts).
 
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -19,6 +20,7 @@ import { currentKodSource, currentRoomSource, documents } from "./resources.ts";
 import { ImageOutput } from "./tool.ts";
 import { connectionTools, type SessionHolder } from "./tools/connect.ts";
 import { TOOLS } from "./tools/index.ts";
+import { defaultRoomsDir } from "../../../apps/editor/src/main/shardsPaths.ts";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -83,7 +85,7 @@ export function createServer(headless: HeadlessSession): McpServer {
 
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: { rooms: { type: "string" } } });
-  const roomsDir = resolve(values.rooms ?? process.env.EDITOR_ROOMS_DIR ?? join(REPO, "rooms"));
+  const roomsDir = resolve(values.rooms ?? process.env.EDITOR_ROOMS_DIR ?? defaultRoomsDir(REPO));
   const server = createServer(new HeadlessSession(roomsDir, REPO));
   await server.connect(new StdioServerTransport());
 }

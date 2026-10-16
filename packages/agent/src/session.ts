@@ -370,7 +370,7 @@ export class HeadlessSession implements Session {
 
   async knownTextures(fresh = false): Promise<ReadonlySet<number> | null> {
     if (!fresh && this.textures?.dir === this._prefs.texturesDir) return this.textures.numbers;
-    const out = await listTextures(this._prefs.texturesDir);
+    const out = await listTextures(this._prefs.texturesDir, this.repoRoot);
     const numbers = out.dir ? new Set(out.textures.map((t) => t.number)) : null;
     this.textures = { dir: this._prefs.texturesDir, numbers };
     return numbers;

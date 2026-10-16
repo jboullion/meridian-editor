@@ -29,14 +29,14 @@ export function roomsApi(dir: string, repoRoot: string): Plugin {
           try {
             const url = new URL(req.url ?? "/", "http://localhost");
             const dir = url.searchParams.get("dir") ?? "";
-            if (url.pathname === "/") send(res, 200, JSON.stringify(await listTextures(dir)), "application/json");
+            if (url.pathname === "/") send(res, 200, JSON.stringify(await listTextures(dir, repoRoot)), "application/json");
             else if (url.pathname === "/file") {
-              const bytes = await readTexture(dir, url.searchParams.get("name") ?? "");
+              const bytes = await readTexture(dir, url.searchParams.get("name") ?? "", repoRoot);
               res.statusCode = 200;
               res.setHeader("Content-Type", "application/octet-stream");
               res.end(bytes);
             } else if (url.pathname === "/resource") {
-              const bytes = await readResource(dir, url.searchParams.get("name") ?? "");
+              const bytes = await readResource(dir, url.searchParams.get("name") ?? "", repoRoot);
               res.statusCode = 200;
               res.setHeader("Content-Type", "application/octet-stream");
               res.end(bytes);

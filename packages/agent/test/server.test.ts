@@ -10,7 +10,7 @@ const REPO = join(import.meta.dirname, "../../..");
 const client = new Client({ name: "test", version: "0" });
 
 beforeAll(async () => {
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(REPO, "packages/agent/src/server.ts")], cwd: REPO, stderr: "pipe" }));
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(REPO, "packages/agent/src/server.ts"), "--rooms", join(REPO, "rooms")], cwd: REPO, stderr: "pipe" }));
 });
 afterAll(() => client.close());
 

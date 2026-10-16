@@ -19,7 +19,7 @@ The editor already builds installers with electron-builder (`npm run editor:dist
 
 ## Shards
 
-- [ ] **The room build step in meridian-browser** (ADR 0001 decision 6): room sources committed there, and `tools/assets/build-assets.ts` running `roomc` to make the `.roo` files.
+- [x] ~~**The room build step in meridian-browser**~~: room sources are committed in shards-server beside their `.roo` files instead (docs/0001-room-editor.md decision 6, 2026-10-15).
 
 ## Agent tools (MCP)
 

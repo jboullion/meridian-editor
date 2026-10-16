@@ -15,7 +15,7 @@ export async function loadGridTexture(session: Session, number: number): Promise
     p = (async () => {
       const known = await session.knownTextures();
       if (!known?.has(number)) return null;
-      return parseBgf(await readTexture(dir, gridTextureName(number)));
+      return parseBgf(await readTexture(dir, gridTextureName(number), session.repoRoot));
     })().catch(() => null);
     cache.set(key, p);
   }
@@ -33,5 +33,5 @@ export async function textureSize(session: Session, number: number): Promise<{ w
 }
 
 export async function texturesFolder(session: Session): Promise<string> {
-  return (await listTextures(session.prefs().texturesDir)).dir;
+  return (await listTextures(session.prefs().texturesDir, session.repoRoot)).dir;
 }

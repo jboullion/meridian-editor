@@ -3,16 +3,19 @@ import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { agentApi } from "./scripts/agentApi.ts";
 import { roomsApi } from "./scripts/roomsApi.ts";
+import { defaultRoomsDir } from "./src/main/shardsPaths.ts";
 
 // The renderer. `npm run web` serves it on its own (with /api/rooms standing in
 // for the Electron bridge); scripts/dev.ts serves it to Electron.
+// The rooms: EDITOR_ROOMS_DIR, else Shards' room sources (shardsPaths.ts), else rooms/.
+const ROOMS = process.env.EDITOR_ROOMS_DIR ?? defaultRoomsDir(resolve(import.meta.dirname, "../.."));
 export default defineConfig({
   root: resolve(import.meta.dirname, "src/renderer"),
   base: "./",
   plugins: [
     react(),
-    roomsApi(resolve(import.meta.dirname, "../../rooms"), resolve(import.meta.dirname, "../..")),
-    agentApi(resolve(import.meta.dirname, "../../rooms")),
+    roomsApi(ROOMS, resolve(import.meta.dirname, "../..")),
+    agentApi(ROOMS),
     contentSecurityPolicy(),
   ],
   server: { host: "127.0.0.1", port: 5174, strictPort: true },
