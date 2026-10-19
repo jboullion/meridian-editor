@@ -91,9 +91,15 @@ So a step or a low ceiling with an untextured face can be walked straight throug
    - **Exceptions:**
      - `d6e6ulake.roo` stores two slope planes that don't pass through their own points; we write the correct plane.
      - roogen's 18 generated rooms come from its own Python BSP builder, so they aren't byte targets.
-5. **Kod stays the home of placements.** The editor shows `plExits`, `plGenerators` and `NewHold` from the room's `.kod` as a read-only overlay, and gives Kod snippets to paste.
+5. **Kod stays the home of placements.** The editor shows `plExits`, `plGenerators` and `NewHold` from the room's `.kod` as an overlay, and gives Kod snippets to paste.
    - 104's old `SaveKodFiles` (`s:roomedit/source/save.cpp:549-698`, disabled in 2004) is the reference for the row, col, fine and angle mapping.
    - Editor-generated Kod files need their own ADR.
+   - Changed 2026-10-19: the editor changes a room class's **exits and locked doors** (its `plExits = Cons([ ... ],plExits);` lines). Builders asked to remove and move them where they see them, on the map.
+     - Kod is still the source. Each change rewrites one line of the class's `.kod` as text (`kod/kodEdit.ts`). Comments, formatting and line endings elsewhere in the file stay as written. Nothing generates a class.
+     - Changes are held with the room, undone with it (`store.ts` `kodTexts`) and written when the room is saved. Saving refuses to write a file that changed on disk since the editor read it.
+     - For a Shards room, install on save then asks, builds the Kod (`server\build.cmd Bkod`), runs `reload system` (which saves the game), and has the room make its exits again (`room.kod RecreateExits`).
+     - The Kod files are shards-server's, so the changes are tracked there for the user to commit, like the room sources (decision 6).
+     - Generators, objects, sounds and the arrival square stay read-only. Agents still write only `rooms/new/<room>.kod` (ADR 0002 decision 7).
 6. **Sources for rooms we author are committed in the Shards repo (meridian-browser); compiled `.roo` files are not.** Its asset build (`tools/assets/build-assets.ts`) runs `roomc`, and the rooms are served like other art.
    - The `rooms/src/` layout and the build step are decided when the first Shards room exists.
    - 104's shipped `.roo` files stay as they are. Imported rooms are committed as sources only once we change them.

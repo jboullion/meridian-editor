@@ -3,9 +3,9 @@
 
 import type { AgentCall, AgentReply } from "../main/agentProtocol.ts";
 import type { EditorBridge, MenuCommand } from "../main/bridge.ts";
-import type { InstallResult } from "../main/shardsInstall.ts";
+import type { InstallResult, KodLoadResult } from "../main/shardsInstall.ts";
 
-export type { InstallResult };
+export type { InstallResult, KodLoadResult };
 
 export type { MenuCommand };
 
@@ -43,8 +43,12 @@ export interface Host {
   readResource(name: string): Promise<Uint8Array>;
   /** The room classes' Kod source from `dir` ("" for the Shards server's copy beside this repo). */
   readKod(dir: string): Promise<KodSources>;
+  /** Save a room class the editor changed: `path` as readKod listed it, in the folder it gave as `dir`; refused if the file no longer has `base`. */
+  writeKod(dir: string, path: string, text: string, base: string): Promise<void>;
   /** Puts a saved room in the game on the local Shards stack; null if it isn't one of Shards' rooms. */
   installRoom(id: string, text: string): Promise<InstallResult | null>;
+  /** Builds and reloads Shards' Kod ("reload system" saves the game), then has the rooms `rids` make their exits again. */
+  loadKod(rids: number[]): Promise<KodLoadResult>;
   /** Null if cancelled or unsupported. */
   chooseFolder(title: string, defaultPath: string): Promise<string | null>;
   setTitle(title: string): void;
@@ -99,7 +103,9 @@ function electronHost(bridge: EditorBridge): Host {
     readTexture: (name) => bridge.readTexture(texturesDir, name),
     readResource: (name) => bridge.readResource(texturesDir, name),
     readKod: (dir) => bridge.readKod(dir),
+    writeKod: (dir, path, text, base) => bridge.writeKod(dir, path, text, base),
     installRoom: (id, text) => bridge.installRoom(id, text),
+    loadKod: (rids) => bridge.loadKod(rids),
     chooseFolder: (title, defaultPath) => bridge.chooseFolder(title, defaultPath),
     setTitle: (title) => bridge.setTitle(title),
     setDirty: (dirty) => bridge.setDirty(dirty),
@@ -175,10 +181,19 @@ function browserHost(): Host {
       const res = await fetch(`./api/kod?dir=${encodeURIComponent(dir)}`);
       return res.ok ? ((await res.json()) as KodSources) : { dir: "", files: [], objectFiles: [], khd: "" };
     },
+    writeKod: async (dir, path, text, base) => {
+      const res = await fetch(`./api/kod/file?dir=${encodeURIComponent(dir)}&path=${encodeURIComponent(path)}`, { method: "PUT", body: JSON.stringify({ text, base }) });
+      if (!res.ok) throw new Error(await res.text());
+    },
     installRoom: async (id, text) => {
       const res = await fetch(`./api/shards/install?path=${encodeURIComponent(id)}`, { method: "POST", body: text });
       if (!res.ok) throw new Error(await res.text());
       return (await res.json()) as InstallResult | null;
+    },
+    loadKod: async (rids) => {
+      const res = await fetch("./api/shards/load-kod", { method: "POST", body: JSON.stringify({ rids }) });
+      if (!res.ok) throw new Error(await res.text());
+      return (await res.json()) as KodLoadResult;
     },
     chooseFolder: async (title, defaultPath) => window.prompt(`${title} (a folder path on this machine)`, defaultPath) || null,
     setTitle: (title) => {

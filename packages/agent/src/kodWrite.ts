@@ -55,47 +55,8 @@ end
 `;
 }
 
-/** The body of `Message() { ... }`: where its braces open and close. */
-function findMessage(src: string, message: string): { open: number; close: number } | null {
-  const m = new RegExp(`^[ \\t]*${message}\\s*\\([^)]*\\)\\s*\\{`, "m").exec(src);
-  if (!m) return null;
-  const open = m.index + m[0].length - 1;
-  let depth = 0;
-  for (let i = open; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}" && --depth === 0) return { open, close: i };
-  }
-  return null;
-}
-
-/**
- * Add lines to a message, before its `propagate;`. The message is created,
- * in the messages section, if the class doesn't have it; `init` starts a new one.
- */
-export function addToMessage(src: string, message: string, lines: string[], init: string[] = []): string {
-  let found = findMessage(src, message);
-  if (!found) {
-    const body = [`   ${message}()`, "   {", ...init.map((l) => `      ${l}`), ...(init.length ? [""] : []), "      propagate;", "   }", "", ""].join("\n");
-    const end = /^end\b/m.exec(src);
-    if (!end) throw new Error("The class has no `end` line.");
-    let at = end.index;
-    if (!/^messages:/m.test(src)) {
-      src = `${src.slice(0, at)}messages:\n\n${src.slice(at)}`;
-      at += "messages:\n\n".length;
-    }
-    src = `${src.slice(0, at)}${body}${src.slice(at)}`;
-    found = findMessage(src, message)!;
-  }
-  const inside = src.slice(found.open, found.close);
-  const prop = inside.lastIndexOf("propagate;");
-  let at: number;
-  if (prop >= 0) {
-    // At the start of the propagate line, after a blank line.
-    at = found.open + inside.lastIndexOf("\n", prop) + 1;
-  } else at = found.open + inside.lastIndexOf("\n") + 1;
-  const text = lines.map((l) => `      ${l}\n`).join("");
-  return src.slice(0, at) + text + src.slice(at);
-}
+// Shared with the editor, which edits exits in the server's Kod too.
+export { addToMessage } from "../../../apps/editor/src/renderer/kod/kodEdit.ts";
 
 /** Set `name = value` in a section (classvars or properties), adding it if it isn't there. */
 export function setVariable(src: string, section: "classvars" | "properties", name: string, value: string): string {

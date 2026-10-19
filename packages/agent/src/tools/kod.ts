@@ -7,7 +7,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { objectLight } from "../../../../apps/editor/src/renderer/kod/kodLights.ts";
-import { kodRoomLight, kodToEditor, parseKodRoom, roomBox, type KodRoom } from "../../../../apps/editor/src/renderer/kod/kodRooms.ts";
+import { exitSpec, removeExit, setExit, type ExitSpec } from "../../../../apps/editor/src/renderer/kod/kodEdit.ts";
+import { kodRoomLight, kodToEditor, parseKodRoom, roomBox, type KodExit, type KodRoom } from "../../../../apps/editor/src/renderer/kod/kodRooms.ts";
 import { gameLight } from "../../../../apps/editor/src/renderer/preview/gameLight.ts";
 import { addToMessage, changedLines, newRoomKodText, setVariable } from "../kodWrite.ts";
 import { NEW_KOD, OpError, type Session } from "../session.ts";
@@ -52,6 +53,15 @@ function ownKod(s: Session, room?: string): { file: string; name: string } {
   const name = room ?? s.doc()?.name;
   if (!name || !/^\w+$/.test(name)) throw new OpError("Give the room's name (its rooms/new/<name>.kod).");
   return { file: join(s.roomsDir, "new", `${name}.kod`), name };
+}
+
+/** The exit on a square of a class's text, and its place in the class's exits (the last listed, which Kod uses). */
+function exitAt(s: Session, file: string, text: string, at: string): { index: number; exit: KodExit } {
+  const [r, c] = parseSquare(at);
+  const exits = parseKodRoom({ path: file, text }, new Map())?.exits ?? [];
+  const index = exits.findLastIndex((e) => e.row === r && e.col === c);
+  if (index < 0) throw new OpError(`${s.doc()?.name ?? "The room"}'s Kod has no exit on square ${r},${c}.`);
+  return { index, exit: exits[index]! };
 }
 
 /** Write a new room's Kod, check it still parses, and report the change. */
@@ -195,6 +205,50 @@ export const kodTools = [
       const before = await readFile(file, "latin1");
       const lines = [...(a.comment ? [`// ${a.comment}`] : []), `plExits = Cons([ ${fields} ],plExits);`];
       return writeKod(s, file, before, addToMessage(before, "CreateStandardExits", lines, ["plExits = $;"]));
+    },
+  }),
+
+  tool({
+    name: "kod_set_exit",
+    title: "Change an exit in Kod",
+    description:
+      "Change the exit or locked door on square at, in the open room's own Kod: to ROOM_LOCKED_DOOR (with an optional message resource) or a room (an RID constant or number) at toSquare; moveTo moves it to another square. Only that plExits line changes.",
+    input: {
+      at: square,
+      to: z.string().regex(/^(RID_\w+|ROOM_LOCKED_DOOR|\d+)$/).optional(),
+      toSquare: square.optional(),
+      rotate: ROTATE.optional(),
+      message: z.string().regex(/^[A-Za-z_]\w*$/).optional().describe("A locked door's message resource"),
+      moveTo: square.optional(),
+    },
+    run: async (s, a) => {
+      const { file } = ownKod(s);
+      if (!existsSync(file)) throw new OpError(`${file} doesn't exist: kod_new_room first.`);
+      const before = await readFile(file, "latin1");
+      const { index, exit } = exitAt(s, file, before, a.at);
+      const old = exitSpec(exit);
+      const [row, col] = a.moveTo ? parseSquare(a.moveTo) : [old.row, old.col];
+      let spec: ExitSpec;
+      if ((a.to ?? (old.dest === null ? "ROOM_LOCKED_DOOR" : old.dest)) === "ROOM_LOCKED_DOOR") spec = { row, col, dest: null, ...(a.message ? { message: a.message } : old.dest === null && old.message ? { message: old.message } : {}) };
+      else {
+        const [dr, dc] = a.toSquare ? parseSquare(a.toSquare) : old.dest !== null ? [old.destRow, old.destCol] : [];
+        if (dr === undefined || dc === undefined) throw new OpError("Give toSquare, where the exit puts players in the other room.");
+        spec = { row, col, dest: a.to ?? (old.dest as string), destRow: dr, destCol: dc, rotate: a.rotate ?? (old.dest !== null ? old.rotate : undefined) };
+      }
+      return writeKod(s, file, before, setExit(before, index, spec));
+    },
+  }),
+
+  tool({
+    name: "kod_remove_exit",
+    title: "Remove an exit from Kod",
+    description: "Remove the exit or locked door on square at from the open room's own Kod (its plExits line).",
+    input: { at: square },
+    run: async (s, a) => {
+      const { file } = ownKod(s);
+      if (!existsSync(file)) throw new OpError(`${file} doesn't exist: kod_new_room first.`);
+      const before = await readFile(file, "latin1");
+      return writeKod(s, file, before, removeExit(before, exitAt(s, file, before, a.at).index));
     },
   }),
 

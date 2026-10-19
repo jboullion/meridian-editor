@@ -2,7 +2,7 @@
 // both the sandboxed preload and the renderer can import it.
 
 import type { AgentCall, AgentReply } from "./agentProtocol.ts";
-import type { InstallResult } from "./shardsInstall.ts";
+import type { InstallResult, KodLoadResult } from "./shardsInstall.ts";
 
 export interface OpenedFile {
   /** Absolute path. */
@@ -30,6 +30,8 @@ export interface EditorBridge {
   readResource(dir: string, name: string): Promise<Uint8Array>;
   /** The room classes' Kod source and blakston.khd from `dir` ("" for the default). */
   readKod(dir: string): Promise<{ dir: string; files: { path: string; text: string }[]; objectFiles: { path: string; text: string }[]; khd: string }>;
+  /** Save a room class the editor changed, by its path in the Kod folder `dir`, if it still has `base` (kod.ts writeKodFile). */
+  writeKod(dir: string, path: string, text: string, base: string): Promise<void>;
   chooseFolder(title: string, defaultPath: string): Promise<string | null>;
   setTitle(title: string): void;
   setDirty(dirty: boolean): void;
@@ -40,6 +42,8 @@ export interface EditorBridge {
   readyForFiles(): void;
   /** Puts a saved Shards room in the game (shardsInstall.ts); null if `path` isn't one of Shards' rooms. */
   installRoom(path: string, text: string): Promise<InstallResult | null>;
+  /** Builds and reloads Shards' Kod, then has the rooms `rids` make their exits again (shardsInstall.ts loadKod). */
+  loadKod(rids: number[]): Promise<KodLoadResult>;
   /** Calls from an agent (agentEndpoint.ts), answered by the page. */
   onAgentCall(fn: (call: AgentCall) => Promise<AgentReply>): () => void;
 }

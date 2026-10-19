@@ -5,9 +5,10 @@ import { formatRoomSource, importRoo, parseRoomSource, validateSource, type Room
 import { compileOnce } from "./compiler.ts";
 import { promptForm } from "./dialogs.tsx";
 import { newRoom, newRoomWithFloor } from "./ops/edit.ts";
-import { host, type RoomEntry, type OpenedFile } from "./host.ts";
+import { baseName, host, type RoomEntry, type OpenedFile } from "./host.ts";
+import { saveKodChanges } from "./kod/kodStore.ts";
 import { installAfterSave } from "./shardsInstall.ts";
-import { editor, isDirty, loadRoom, notify } from "./store.ts";
+import { editor, isDirty, kodDirty, loadRoom, notify } from "./store.ts";
 
 const ROOM_SUFFIX = /\.room\.json$|\.json$/i;
 
@@ -61,24 +62,39 @@ export async function save(as = false): Promise<boolean> {
   const { room, doc } = editor.get();
   if (!room || !doc) return false;
   const text = formatRoomSource(room);
+  // The room class's changed Kod is saved with the room (kodStore.ts).
+  let saved = "";
+  const withKod = async (): Promise<string[]> => {
+    try {
+      const kod = await saveKodChanges();
+      if (kod.length) notify(`Saved ${saved} and ${kod.map(baseName).join(", ")}`);
+      return kod;
+    } catch (e) {
+      notify(`Saved ${saved}, but not its Kod: ${(e as Error).message}`, "error");
+      return [];
+    }
+  };
   try {
     if (doc.id && !as) {
       await host.writeRoom(doc.id, text);
       editor.set({ saved: room });
-      notify(`Saved ${doc.name}`);
-      void installAfterSave(doc.id, text);
-      return true;
+      notify(`Saved ${(saved = doc.name)}`);
+      const kod = await withKod();
+      void installAfterSave(doc.id, text, kod);
+      return !kodDirty(editor.get());
     }
     const where = await host.saveRoomAs(`${doc.name}.room.json`, text);
     if (where) {
       editor.set({ doc: { id: where.id, name: where.name.replace(ROOM_SUFFIX, "") }, saved: room });
-      notify(`Saved ${where.name}`);
-      return true;
+      notify(`Saved ${(saved = where.name)}`);
+      await withKod();
+      return !kodDirty(editor.get());
     }
     if (host.kind === "browser") {
       editor.set({ saved: room });
-      notify(`Downloaded ${doc.name}.room.json`);
-      return true;
+      notify(`Downloaded ${(saved = `${doc.name}.room.json`)}`);
+      await withKod();
+      return !kodDirty(editor.get());
     }
   } catch (e) {
     notify(`Couldn't save: ${(e as Error).message}`, "error");

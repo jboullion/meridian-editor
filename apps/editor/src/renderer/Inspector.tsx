@@ -1,25 +1,32 @@
 // Properties of the selection — one item or many (changes apply to all of
-// them; values that differ show as "mixed") — or of the room when nothing is
-// selected. roomedit's Edit Object dialogs, as a panel.
+// them; values that differ show as "mixed") — or of a Kod exit picked on the
+// map, or of the room when nothing is selected. roomedit's Edit Object
+// dialogs, as a panel.
 
 import { PROFILES, SF, WF } from "@meridian-editor/roo";
 import type { RoomSource, SourceSector, SourceSide, SourceSlope, SourceThing } from "@meridian-editor/roomc";
-import { runCommand } from "./commands.tsx";
+import { changeKodExit, runCommand } from "./commands.tsx";
 import { useCompiled } from "./compiler.ts";
 import { bits, Check, Choice, common, hex, NumberField, SCROLL_DIRECTIONS, SCROLL_SPEEDS, Section } from "./fields.tsx";
 import { kodCoords, roomBoxSize } from "./geometry.ts";
+import { exitSpec, type ExitSpec } from "./kod/kodEdit.ts";
+import { useKodRoom } from "./kod/kodStore.ts";
+import { baseName } from "./host.ts";
 import { moveItems, sectorVertices, THING_TYPES } from "./ops/edit.ts";
+import { OpError } from "./ops/types.ts";
 import { TextureField } from "./textures/TexturePicker.tsx";
-import { edit, selectOne, useEditor, type ItemKind } from "./store.ts";
+import { edit, kodDirty, selectOne, useEditor, type ItemKind } from "./store.ts";
 
 export function Inspector(): React.JSX.Element {
   const room = useEditor((s) => s.room);
   const selection = useEditor((s) => s.selection);
+  const kodExit = useEditor((s) => s.kodExit);
   if (!room) return <div className="inspector empty">Open a room to edit it.</div>;
   const n = selection?.indices.length ?? 0;
   return (
     <div className="inspector">
-      {!selection && <RoomPanel room={room} />}
+      {kodExit !== null && <KodExitPanel index={kodExit} />}
+      {!selection && kodExit === null && <RoomPanel room={room} />}
       {selection?.kind === "vertex" && <VertexPanel room={room} indices={selection.indices} />}
       {selection?.kind === "linedef" && <LinedefPanel room={room} indices={selection.indices} />}
       {selection?.kind === "sector" && <SectorPanel room={room} indices={selection.indices} />}
@@ -530,6 +537,90 @@ function ThingPanel({ room, indices }: { room: RoomSource; indices: number[] }):
         </>
       )}
       {full && corner && <p className="hint">With more than two things the room saves roomedit's full thing records.</p>}
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------- Kod exit
+
+const ROTATIONS = ["ROTATE_NONE", "ROTATE_90", "ROTATE_180", "ROTATE_270"];
+
+/** A plExits entry of the room's class: a locked door or an exit. Changes are held until the room is saved. */
+function KodExitPanel({ index }: { index: number }): React.JSX.Element | null {
+  const k = useKodRoom().room;
+  const unsaved = useEditor(kodDirty);
+  const e = k?.exits[index];
+  if (!k || !e) return null;
+  let spec: ExitSpec;
+  try {
+    spec = exitSpec(e);
+  } catch (err) {
+    if (!(err instanceof OpError)) throw err;
+    return (
+      <Section title="Kod exit">
+        <p className="hint">{err.message}</p>
+      </Section>
+    );
+  }
+  const set = (patch: Partial<ExitSpec>): void => void changeKodExit(index, { ...spec, ...patch } as ExitSpec);
+  const text = (label: string, value: string, apply: (v: string) => void, hint: string): React.JSX.Element => (
+    <label className="field" title={hint}>
+      <span>{label}</span>
+      <input
+        defaultValue={value}
+        key={`${index}:${value}`}
+        onBlur={(ev) => ev.target.value.trim() !== value && apply(ev.target.value.trim())}
+        onKeyDown={(ev) => ev.key === "Enter" && ev.currentTarget.blur()}
+      />
+    </label>
+  );
+  return (
+    <Section
+      title={spec.dest === null ? "Kod locked door" : "Kod exit"}
+      actions={
+        <>
+          <button className="small" title="Change it in a dialog (Enter, or double-click it)" onClick={() => runCommand("kod.editExit")}>
+            Edit…
+          </button>
+          <button className="small danger" title="Remove it from the class (Del)" onClick={() => runCommand("kod.deleteExit")}>
+            Delete
+          </button>
+        </>
+      }
+    >
+      <p className="hint">
+        {k.className}, {baseName(k.path)} line {e.line}
+        {unsaved && " · unsaved: Save writes the Kod"}
+      </p>
+      <Choice
+        label="What it is"
+        value={spec.dest === null ? "locked" : "exit"}
+        options={[
+          { value: "locked", label: "Locked door" },
+          { value: "exit", label: "Exit to another room" },
+        ]}
+        onChange={(v) => {
+          if (v === "locked") set({ dest: null, message: undefined });
+          else runCommand("kod.editExit");
+        }}
+      />
+      <div className="row">
+        <NumberField label="Row" value={spec.row} min={1} onCommit={(row) => set({ row })} title="Kod row, from 1 at the room box's top" />
+        <NumberField label="Column" value={spec.col} min={1} onCommit={(col) => set({ col })} title="Kod column, from 1 at the room box's left" />
+      </div>
+      {spec.dest === null ? (
+        text("Message", spec.message ?? "", (message) => set({ message: message || undefined }), "A resource name from the class (marion_gate_warning); empty for the server's \"the door is locked\"")
+      ) : (
+        <>
+          {text("To room", spec.dest, (dest) => set({ dest }), "An RID_ constant from blakston.khd, or a room number")}
+          <div className="row three">
+            <NumberField label="At row" value={spec.destRow} min={1} onCommit={(destRow) => set({ destRow })} title="Where players arrive in that room" />
+            <NumberField label="At column" value={spec.destCol} min={1} onCommit={(destCol) => set({ destCol })} />
+            <Choice label="Turn" value={spec.rotate ?? "ROTATE_NONE"} options={[...new Set([...ROTATIONS, spec.rotate ?? "ROTATE_NONE"])].map((r) => ({ value: r, label: r.replace(/^ROTATE_/, "") }))} onChange={(rotate) => set({ rotate })} />
+          </div>
+        </>
+      )}
+      <p className="hint">Drag the square on the map to move it. Saving the room writes the .kod; for Shards' rooms it then builds and reloads the Kod, after asking.</p>
     </Section>
   );
 }

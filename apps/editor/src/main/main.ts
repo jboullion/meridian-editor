@@ -8,9 +8,9 @@ import { PageCalls, startAgentEndpoint } from "./agentEndpoint.ts";
 import { EDITOR_DEV_DATA } from "./agentFiles.ts";
 import type { AgentReply } from "./agentProtocol.ts";
 import type { MenuCommand } from "./bridge.ts";
-import { readKodSources } from "./kod.ts";
+import { readKodSources, writeKodFile } from "./kod.ts";
 import { listRooms } from "./roomsFs.ts";
-import { installRoom, isShardsRoom } from "./shardsInstall.ts";
+import { installRoom, isShardsRoom, loadKod } from "./shardsInstall.ts";
 import { defaultRoomsDir } from "./shardsPaths.ts";
 import { listTextures, readResource, readTexture } from "./textures.ts";
 
@@ -220,7 +220,9 @@ function registerIpc(): void {
     return result.filePath;
   });
   ipcMain.handle("kod:read", (_e, dir: string) => readKodSources(dir, repoRoot));
+  ipcMain.handle("kod:write", (_e, dir: string, path: string, text: string, base: string) => writeKodFile(dir, path, text, base, repoRoot));
   ipcMain.handle("shards:install", (_e, path: string, text: string) => (isShardsRoom(repoRoot, path) ? installRoom(repoRoot, path, text) : null));
+  ipcMain.handle("shards:load-kod", (_e, rids: number[]) => loadKod(repoRoot, rids));
   ipcMain.handle("textures:list", (_e, dir: string) => listTextures(dir, repoRoot));
   ipcMain.handle("textures:read", (_e, dir: string, name: string) => readTexture(dir, name, repoRoot));
   ipcMain.handle("textures:read-resource", (_e, dir: string, name: string) => readResource(dir, name, repoRoot));

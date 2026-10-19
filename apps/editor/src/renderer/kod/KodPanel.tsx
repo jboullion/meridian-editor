@@ -1,9 +1,10 @@
 // The bottom panel's Kod tab: which room class the open room is, and every
 // exit, generator, object and sound its Kod places, each a link to its spot on
-// the map. Read-only: placements are edited in the .kod file.
+// the map. Exits and locked doors can be changed (a link picks one for the
+// inspector); the rest are edited in the .kod file.
 
 import { runCommand } from "../commands.tsx";
-import { editor, requestView, useEditor } from "../store.ts";
+import { editor, requestView, selectKodExit, useEditor } from "../store.ts";
 import { kod, kodMarks, roomBox, useKod, useKodRoom, type KodMark } from "./kodStore.ts";
 
 const GROUPS: { title: string; kinds: KodMark["kind"][] }[] = [
@@ -36,6 +37,8 @@ export function KodPanel(): React.JSX.Element {
     );
   }
   const marks = kodMarks(k, box);
+  // kodMarks lists the arrival first, then the exits in the class's order.
+  const firstExit = marks.findIndex((m) => m.kind === "exit" || m.kind === "locked");
   return (
     <div className="kod-panel">
       <div className="kod-head">
@@ -99,6 +102,7 @@ export function KodPanel(): React.JSX.Element {
                       onClick={() => {
                         requestView({ kind: "center", x: m.x, y: m.y });
                         if (!kod.get().show) kod.set({ show: true });
+                        if (m.kind === "exit" || m.kind === "locked") return selectKodExit(marks.indexOf(m) - firstExit);
                         editor.set({ message: { text: `${m.label}: Kod row ${m.row}, col ${m.col} (${k.path}:${m.line})`, kind: "info" } });
                       }}
                     >

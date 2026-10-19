@@ -7,7 +7,7 @@ import { exportRoo, newRoomDialog, openFile, save } from "./actions.ts";
 import { compiled } from "./compiler.ts";
 import { confirmDialog, promptForm, showDialog } from "./dialogs.tsx";
 import { kodCoords, roomBounds, roomBoxSize } from "./geometry.ts";
-import { host } from "./host.ts";
+import { baseName, host } from "./host.ts";
 import { checkCrossReferences, checkSectors, checkTextureNames, checkTextures, statistics, type CheckIssue } from "./ops/checks.ts";
 import { connectVertices, splitLinedefsAndSector } from "./ops/draw.ts";
 import {
@@ -40,7 +40,9 @@ import { OpError } from "./ops/types.ts";
 import { browseTextures } from "./textures/TexturePicker.tsx";
 import { knownTextures, reloadLibrary, textureWidth } from "./textures/library.ts";
 import { checkKodPlacements } from "./kod/kodChecks.ts";
-import { currentKodRoom, kod, reloadKod } from "./kod/kodStore.ts";
+import { addExit, exitSpec, removeExit, setExit, type ExitSpec } from "./kod/kodEdit.ts";
+import type { KodExit, KodRoom } from "./kod/kodRooms.ts";
+import { currentKodRoom, editRoomKod, kod, reloadKod } from "./kod/kodStore.ts";
 import { editorToClient, startWalk, stopWalk, walk } from "./preview/walkStore.ts";
 import { installOnSave, setInstallOnSave } from "./shardsInstall.ts";
 import {
@@ -53,6 +55,7 @@ import {
   requestView,
   savePrefs,
   select,
+  selectKodExit,
   selectOne,
   setMode,
   setTool,
@@ -63,7 +66,7 @@ import {
   type Tool,
 } from "./store.ts";
 
-export type Group = "File" | "Edit" | "Mode" | "Tool" | "View" | "Vertices" | "Linedefs" | "Sectors" | "Things" | "Search" | "Check" | "Textures";
+export type Group = "File" | "Edit" | "Mode" | "Tool" | "View" | "Vertices" | "Linedefs" | "Sectors" | "Things" | "Kod" | "Search" | "Check" | "Textures";
 
 export interface Command {
   id: string;
@@ -508,9 +511,137 @@ function statsDialog(): void {
   );
 }
 
+// ---------------------------------------------------------------- Kod exits
+
+const ALL_MODES: ItemKind[] = ["vertex", "linedef", "sector", "thing"];
+const ROTATIONS = ["ROTATE_NONE", "ROTATE_90", "ROTATE_180", "ROTATE_270"];
+const kodExitPicked = (s: EditorState): boolean => s.kodExit !== null;
+
+/** The Kod exit picked on the map. */
+function pickedExit(): { k: KodRoom; e: KodExit; index: number } | null {
+  const index = editor.get().kodExit;
+  const k = currentKodRoom().room;
+  const e = index === null ? undefined : k?.exits[index];
+  if (!k || !e || index === null) {
+    notify("Pick a Kod exit on the map first: click its square or its label.", "error");
+    return null;
+  }
+  return { k, e, index };
+}
+
+/** Where an exit leads must be a room the Kod knows. */
+function checkDest(spec: ExitSpec): void {
+  const rids = kod.get().index?.rids;
+  if (spec.dest?.startsWith("RID_") && rids && !rids.has(spec.dest)) throw new OpError(`${spec.dest} isn't one of blakston.khd's room numbers.`);
+}
+
+export function describeExit(e: ExitSpec): string {
+  return e.dest === null ? "a locked door" : `an exit to ${e.dest} (${e.destRow}, ${e.destCol})`;
+}
+
+/** Change Kod exit `index` of the open room's class: one undo step, written when the room is saved. */
+export function changeKodExit(index: number, spec: ExitSpec): boolean {
+  const ok = editRoomKod((text) => {
+    checkDest(spec);
+    return setExit(text, index, spec);
+  });
+  if (ok) notify(`Kod row ${spec.row}, col ${spec.col} is now ${describeExit(spec)}. Save to write the Kod.`);
+  return ok;
+}
+
+async function exitDialog(title: string, initial: ExitSpec, submit: string): Promise<ExitSpec | null> {
+  const rotate = initial.dest !== null ? (initial.rotate ?? "ROTATE_NONE") : "ROTATE_NONE";
+  const v = await promptForm(
+    title,
+    [
+      {
+        key: "kind",
+        label: "What it is",
+        type: "select",
+        options: [
+          { value: "locked", label: "Locked door: stops players, with a message" },
+          { value: "exit", label: "Exit: takes players to another room" },
+        ],
+      },
+      { key: "row", label: "Kod row", type: "number", min: 1 },
+      { key: "col", label: "Kod column", type: "number", min: 1 },
+      { key: "message", label: "Locked door's message", type: "text", hint: "A resource name from the class, such as marion_gate_warning; empty for the server's \"the door is locked\"." },
+      { key: "dest", label: "Exit to room", type: "text", hint: "An RID_ constant from blakston.khd (RID_MAR_INN) or a room number." },
+      { key: "destRow", label: "Arrive at row", type: "number", min: 1 },
+      { key: "destCol", label: "Arrive at column", type: "number", min: 1 },
+      { key: "rotate", label: "Turn the player", type: "select", options: [...new Set([...ROTATIONS, rotate])].map((r) => ({ value: r, label: r })) },
+    ],
+    {
+      kind: initial.dest === null ? "locked" : "exit",
+      row: initial.row,
+      col: initial.col,
+      message: initial.dest === null ? (initial.message ?? "") : "",
+      dest: initial.dest ?? "",
+      destRow: initial.dest !== null ? initial.destRow : 1,
+      destCol: initial.dest !== null ? initial.destCol : 1,
+      rotate,
+    },
+    submit,
+    "Kod rows and columns count from 1 at the room box's top-left. Players step on the square to use it (room.kod SomethingTryGo).",
+  );
+  if (!v) return null;
+  const row = Number(v.row);
+  const col = Number(v.col);
+  if (v.kind === "locked") {
+    const message = String(v.message).trim();
+    return { row, col, dest: null, ...(message ? { message } : {}) };
+  }
+  return { row, col, dest: String(v.dest).trim(), destRow: Number(v.destRow), destCol: Number(v.destCol), rotate: String(v.rotate) };
+}
+
+/** Ask for an exit until `apply` takes it (it says why it didn't), or the dialog is cancelled. */
+async function exitDialogLoop(title: string, initial: ExitSpec, submit: string, apply: (spec: ExitSpec) => boolean): Promise<void> {
+  for (let spec: ExitSpec | null = initial; ; ) {
+    spec = await exitDialog(title, spec, submit);
+    if (!spec) return;
+    editor.set({ message: null });
+    if (apply(spec) || editor.get().message?.kind !== "error") return;
+  }
+}
+
+async function editKodExit(): Promise<void> {
+  const p = pickedExit();
+  if (!p) return;
+  await exitDialogLoop(`Kod exit at row ${p.e.row}, col ${p.e.col}`, exitSpec(p.e), "Change", (spec) => changeKodExit(p.index, spec));
+}
+
+function deleteKodExit(): void {
+  const p = pickedExit();
+  if (!p) return;
+  if (editRoomKod((text) => removeExit(text, p.index))) {
+    selectKodExit(null);
+    notify(`Removed the ${p.e.dest === null ? "locked door" : `exit to ${p.e.dest}`} at Kod row ${p.e.row}, col ${p.e.col}. Save to write ${baseName(p.k.path)}.`);
+  }
+}
+
+async function addKodExit(): Promise<void> {
+  const { room } = editor.get();
+  const c = cursor.get();
+  const k = currentKodRoom().room;
+  if (!room || !k) return notify(kod.get().error ?? "No Kod room class uses this room's .roo file.", "error");
+  const at = kodCoords(room, c.x, c.y);
+  const index = k.exits.length;
+  await exitDialogLoop(`New Kod exit in ${k.className}`, { row: at?.row ?? 1, col: at?.col ?? 1, dest: null }, "Add", (spec) => {
+    const ok = editRoomKod((text) => {
+      checkDest(spec);
+      return addExit(text, spec);
+    });
+    if (ok) {
+      selectKodExit(index);
+      notify(`Added ${describeExit(spec)} at Kod row ${spec.row}, col ${spec.col}. Save to write ${baseName(k.path)}.`);
+    }
+    return ok;
+  });
+}
+
 // ---------------------------------------------------------------- the registry
 
-const tool = (id: Tool, label: string, keys: string, key: string): Command => ({
+const tool =(id: Tool, label: string, keys: string, key: string): Command => ({
   id: `tool.${id}`,
   label,
   group: "Tool",
@@ -991,6 +1122,11 @@ export const COMMANDS: Command[] = [
       if (s) run((r) => addSlope(r, s[0]!, false), "Added a ceiling slope; set its point heights in the inspector.");
     },
   },
+
+  // Kod exits (the room class's plExits, saved with the room)
+  { id: "kod.editExit", label: "Edit Kod exit…", group: "Kod", keys: "Enter", key: k("enter"), enabled: kodExitPicked, modes: ALL_MODES, run: editKodExit },
+  { id: "kod.deleteExit", label: "Delete Kod exit", group: "Kod", keys: "Del", key: (e) => k("delete")(e) || k("backspace")(e), enabled: kodExitPicked, modes: ALL_MODES, run: deleteKodExit },
+  { id: "kod.addExit", label: "Add Kod exit or locked door here…", group: "Kod", enabled: hasRoom, modes: ALL_MODES, run: addKodExit },
 
   // Search
   { id: "search.find", label: "Find / change…", group: "Search", keys: "Ctrl+F", key: k("ctrl+f"), global: true, enabled: hasRoom, run: findDialog },

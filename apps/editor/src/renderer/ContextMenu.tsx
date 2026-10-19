@@ -53,8 +53,11 @@ export function ContextMenu(): React.JSX.Element | null {
   }, [at, pos]);
 
   if (!at || !pos) return null;
-  const modeCommands = COMMANDS.filter((c) => c.group === MODE_GROUP[mode] && c.modes?.includes(mode));
-  const editCommands = COMMANDS.filter((c) => (c.group === "Edit" || c.group === "View") && c.modes?.includes(mode));
+  // A picked Kod exit has the menu to itself, bar adding another.
+  const exit = state.kodExit !== null;
+  const kodCommands = COMMANDS.filter((c) => c.group === "Kod" && c.modes?.includes(mode) && (exit || c.id === "kod.addExit"));
+  const modeCommands = exit ? [] : COMMANDS.filter((c) => c.group === MODE_GROUP[mode] && c.modes?.includes(mode));
+  const editCommands = exit ? [] : COMMANDS.filter((c) => (c.group === "Edit" || c.group === "View") && c.modes?.includes(mode));
   const sel = state.selection;
   const item = (c: Command): React.JSX.Element => {
     const enabled = !c.enabled || c.enabled(state);
@@ -75,10 +78,12 @@ export function ContextMenu(): React.JSX.Element | null {
   };
   return (
     <div className="context-menu" role="menu" ref={ref} style={{ left: pos.x, top: pos.y }}>
-      <div className="menu-title">{sel ? `${sel.indices.length} ${sel.kind}${sel.indices.length === 1 ? "" : "s"} selected` : `${MODE_GROUP[mode]} mode`}</div>
+      <div className="menu-title">{exit ? "Kod exit" : sel ? `${sel.indices.length} ${sel.kind}${sel.indices.length === 1 ? "" : "s"} selected` : `${MODE_GROUP[mode]} mode`}</div>
       {modeCommands.map(item)}
       {modeCommands.length > 0 && editCommands.length > 0 && <hr />}
       {editCommands.map(item)}
+      {(modeCommands.length > 0 || editCommands.length > 0) && kodCommands.length > 0 && <hr />}
+      {kodCommands.map(item)}
     </div>
   );
 }

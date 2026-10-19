@@ -4,7 +4,7 @@ A Meridian room is two things:
 - the **room file** (`.roo`): the floor plan, heights, textures and lighting. This is what the editor builds.
 - the room's **Kod class** on the server: exits, monster generators, objects, sounds, and the room's light settings. Builders write it as Kod source.
 
-The editor doesn't edit Kod. It reads it, so you can see where the Kod puts things while you change the room around them. This needs a Kod folder (see [Getting started](01-getting-started.md#kod-optional)).
+The editor reads the Kod, so you can see where it puts things while you change the room around them. It can also change the class's exits and locked doors (see [Changing exits and locked doors](#changing-exits-and-locked-doors)); everything else is edited in the `.kod` file. This needs a Kod folder (see [Getting started](01-getting-started.md#kod-optional)).
 
 ## On the map
 
@@ -33,12 +33,41 @@ The **Kod** tab in the bottom panel lists the room's class and everything it pla
 
 - The first line gives the class name, its file, its room ID and the `.roo` it uses.
 - Edge exits are listed under it.
-- The rest is grouped: exits, monster generators, objects, sounds and the arrival square. Each entry gives its Kod row and column. Click one to centre the map on it.
+- The rest is grouped: exits, monster generators, objects, sounds and the arrival square. Each entry gives its Kod row and column. Click one to centre the map on it; clicking an exit also picks it for the inspector.
 - **Show on map (K)** shows or hides the marks.
 - **Check placements** runs the Kod placement check (below).
 - **Reload** reads the Kod again after you've changed it.
 
 The editor finds the class by the room's `.roo` name, or by its room ID. When several classes use the same `.roo` (Tos has a few), a menu lets you pick one.
+
+## Changing exits and locked doors
+
+An exit takes players who step on its square to another room. A locked door stops them there with a message, such as Marion's crypt gate ("This gate was put in place to keep citizens safe…"). Both are lines in the class's `CreateStandardExits`:
+
+```
+plExits = Cons([ 31, 43, RID_MAR_SMITHY, 11, 4, ROTATE_NONE ],plExits);
+plExits = Cons([ 70, 13, ROOM_LOCKED_DOOR, marion_gate_warning ],plExits);
+```
+
+To pick one, click its label on the map, in any mode. Clicking its square also picks it when nothing else in the current mode is there, as in **Things** mode. The picked square gets an orange outline and the inspector shows it:
+- **What it is:** a locked door, or an exit to another room.
+- **Row** and **Column:** its square.
+- For a locked door, **Message**: a resource name from the class, or empty for the server's "the door is locked".
+- For an exit, **To room** (an `RID_` constant from `blakston.khd`, or a room number), **At row** and **At column** (where players arrive), and **Turn**.
+
+You can also:
+- drag the square to another square;
+- double-click it, or press **Enter**, for the same fields in a dialog;
+- press **Del**, or use the inspector's **Delete**, to remove it;
+- right-click a square and choose **Add Kod exit or locked door here…** to add one.
+
+Each change is one undo step, and the toolbar shows the room as unsaved. Only that exit's line of the `.kod` file changes. Two exits can't share a square.
+
+**Save** writes the `.kod` file along with the room. If the file changed on disk since the editor read it, the Kod isn't saved; **Reload** on the Kod tab, then make the change again.
+
+For a Shards room with install on save on, saving then asks to load the Kod change. The server builds the Kod (about half a minute) and runs `reload system`, which saves the game and reloads all the Kod; players stay connected. Then the room makes its exits again. If you say no, the change is saved, but the server keeps the old exits until the Kod is reloaded.
+
+The `.kod` files are in shards-server, so commit the change there with the room.
 
 ## Checking placements
 

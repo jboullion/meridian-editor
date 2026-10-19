@@ -71,6 +71,19 @@ describe.skipIf(!defaultKodDir(REPO))("Kod tools", () => {
     expect(k.objects).toMatchObject([{ what: "Brazier", square: "3,3", fine: [16, 32] }]);
     expect(k.light.outsideFactor).toBe(3);
 
+    // Change and remove exits by their square.
+    await call(s, "kod_add_exit", { at: "2,2", to: "ROOM_LOCKED_DOOR" });
+    await call(s, "kod_set_exit", { at: "2,2", moveTo: "2,3", message: "room_name_KodTestRoom" });
+    await call(s, "kod_set_exit", { at: "11,8", toSquare: "44,31" });
+    expect((await call(s, "kod_room")).exits).toMatchObject([
+      { square: "11,8", to: "RID_TOS", toSquare: "44,31" },
+      { square: "2,3", to: "locked door" },
+    ]);
+    await expect(call(s, "kod_set_exit", { at: "2,3", moveTo: "11,8" })).rejects.toThrow(/already has an exit/);
+    await call(s, "kod_remove_exit", { at: "2,3" });
+    await expect(call(s, "kod_remove_exit", { at: "2,3" })).rejects.toThrow(/no exit on square 2,3/);
+    expect((await call(s, "kod_room")).exits).toHaveLength(1);
+
     const checks = await call(s, "run_checks", { which: ["kod"] });
     expect(checks.errors).toBe(0);
     const lights = await call(s, "kod_lights", { hour: 22 });

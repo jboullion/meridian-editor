@@ -36,7 +36,7 @@ How it works:
 - **Checks** (F9): roomedit's sector, cross-reference and texture checks. Results link to the problem, and some come with a Fix button.
 - **Textures:** `grdNNNNN.bgf` from Shards' asset build (`meridian-browser/dist/assets`, what our clients get), else the installed Meridian 104 client (`%LOCALAPPDATA%\Meridian-104\resource`), or a folder set in Preferences.
 - **Map display:** sectors are shaded by floor height, ceiling height or light, using the live compiled BSP. The status bar shows the cursor's Kod row and column.
-- **Kod placements** (K toggles them on the map), read-only, from the room's class in the server's Kod:
+- **Kod placements** (K toggles them on the map), from the room's class in the server's Kod:
   - What's shown:
     - exits (green squares) and locked doors (red);
     - edge exits along the room box;
@@ -46,6 +46,7 @@ How it works:
     - the arrival square.
   - The **Kod** tab in the bottom panel lists them, each linked to its spot. The status bar names what's on the square under the cursor.
   - *Check Kod placements* (also part of F9) flags placements outside the room box or where there's no floor. Moving the room box corners or walls is the usual cause.
+  - **Exits and locked doors can be changed.** Click one's label (or its square, where nothing else is) to pick it. Then edit it in the inspector, drag it to another square, delete it, or right-click to add one. Each change rewrites only that `plExits` line of the class's `.kod` (`kod/kodEdit.ts`); it's undone with the room and written when the room is saved. Everything else stays read-only.
   - *Copy Kod position here* (right-click) copies `#new_row=…,#new_col=…,#fine_row=…,#fine_col=…` for pasting into Kod.
   - The class is found by the room's `.roo` name, or by its room ID. When several classes share one `.roo` (`tos.roo`), the tab lets you pick.
   - The Kod comes from the Shards server (shards-server's `kod`, through `meridian-browser/server/src` beside this repo), or the folder set in Preferences.
@@ -156,7 +157,8 @@ Run the Shards stack (`npm run dev -- --editor` in meridian-browser starts this 
 
 - The status bar says what happened, for example "Installed razainn.roo and rebuilt RID 301 on the server (1717 ms)".
 - Preferences can turn this off ("Saving a Shards room puts it in the game").
-- Only geometry is installed this way. A new room, or a change to its Kod, still goes through `npm run shards:install` below, which builds and reloads the Kod (that saves the game).
+- When the save also changed the room's exits (its `.kod`), the editor asks, then builds the Kod (`serveruild.cmd Bkod`), runs `reload system` (that saves the game) and has the room make its exits again (`room.kod RecreateExits`).
+- A new room still goes through `npm run shards:install` below, which registers its class and builds and reloads the Kod.
 - `npm run start` runs the last build (`out/`). After pulling or changing the editor, use `npm run editor`, or build again.
 
 ## Testing rooms in Shards
@@ -235,7 +237,7 @@ Claude Code picks it up from `.mcp.json` in this repo. It starts headless, on fi
   - Reading tools describe the room for an agent: `describe_sector` gives a sector's outline, holes and neighbours, with the steps and headroom between them; `at_point` and `convert_coords` translate between editor units and Kod squares.
   - `render_map` returns a picture of the map with index labels; `view_textures` a labelled contact sheet of textures (their numbers have no names).
   - `walk` walks the room with the 3D preview's `Walker` (the client's `move.c`) and says what stopped the player and why; `saveAs` keeps the route as a `.walk.json`.
-  - Kod: `kod_room` and `kod_lights` read the room's class; for new rooms only, `kod_new_room`, `kod_add_exit`, `kod_add_object` and `kod_set` write `rooms/new/<room>.kod` (and the tools read it ahead of the server's copy).
+  - Kod: `kod_room` and `kod_lights` read the room's class; for new rooms only, `kod_new_room`, `kod_add_exit`, `kod_set_exit`, `kod_remove_exit`, `kod_add_object` and `kod_set` write `rooms/new/<room>.kod` (and the tools read it ahead of the server's copy).
   - Shards: `shards_status`, `shards_install` (asks the user every time: it reloads the server's Kod, which saves the game) and `shards_walk` (only as `shardpal`, and not while it's logged in).
   - Each tool call is one undo step; `batch` makes several one step. Results carry the room's revision, and edits take `ifRevision` so a stale index fails instead of editing the wrong item.
 - **Resources and prompts:** a primer on rooms for agents (`meridian://primer`), the user manual, AGENTS.md, the ADRs, the open room's source and its Kod class; and the prompts `build-room`, `review-room` and `port-room`.
@@ -298,6 +300,7 @@ What the tests check:
 - **Walk mode:** the walker moves exactly like Shards' `PlayerMover`, frame by frame, on sampled shipped rooms. In `edtest` it climbs the step and the ramp, and stops at the ledge, the pillar and the low tunnel.
 - **Editor operations:** unit tests for each operation, plus drawing inner rooms and cutting lines in shipped rooms. Every fourth room by default; `ROO_STRESS=all` sweeps all 362. Every sector must stay closed.
 - **Kod placements:** the parser on a sample class, and on the server's Kod tree when it's present: a class for nearly every shipped room, and the right one when several share a `.roo`.
+- **Kod exit edits:** changing, removing and adding exits keeps the rest of the file (comments, CRLF) as written; every exit in the server's room classes rewritten as itself reads back the same; and Marion's crypt gate comes out cleanly.
 
 ### Screenshots
 

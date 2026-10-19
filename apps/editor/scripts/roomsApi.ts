@@ -1,15 +1,16 @@
 // Dev-server stand-in for the Electron bridge, so the UI also runs in a plain
 // browser: GET /api/rooms lists the rooms folder, GET/PUT /api/rooms/file?path=
 // reads and writes one room source, /api/textures serves the texture library and
-// /api/kod the server's room Kod, and POST /api/shards/install?path= puts a saved
-// Shards room in the game (shardsInstall.ts). Bound to 127.0.0.1 by vite.config.ts.
+// /api/kod the server's room Kod (PUT /api/kod/file?dir=&path= saves a changed
+// class), and POST /api/shards/install?path= puts a saved Shards room in the game,
+// POST /api/shards/load-kod its Kod (shardsInstall.ts). Bound to 127.0.0.1 by vite.config.ts.
 
 import { readFile, writeFile } from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import type { Plugin } from "vite";
-import { readKodSources } from "../src/main/kod.ts";
+import { readKodSources, writeKodFile } from "../src/main/kod.ts";
 import { listRooms, resolveInside } from "../src/main/roomsFs.ts";
-import { installRoom, isShardsRoom } from "../src/main/shardsInstall.ts";
+import { installRoom, isShardsRoom, loadKod } from "../src/main/shardsInstall.ts";
 import { listTextures, readResource, readTexture } from "../src/main/textures.ts";
 
 export function roomsApi(dir: string, repoRoot: string): Plugin {
@@ -20,7 +21,14 @@ export function roomsApi(dir: string, repoRoot: string): Plugin {
         void (async () => {
           try {
             const url = new URL(req.url ?? "/", "http://localhost");
-            send(res, 200, JSON.stringify(await readKodSources(url.searchParams.get("dir") ?? "", repoRoot)), "application/json");
+            const kodDir = url.searchParams.get("dir") ?? "";
+            if (url.pathname === "/file") {
+              if (req.method !== "PUT") return send(res, 405, "method not allowed", "text/plain");
+              const { text, base } = JSON.parse(await body(req)) as { text: string; base: string };
+              await writeKodFile(kodDir, url.searchParams.get("path") ?? "", text, base, repoRoot);
+              return send(res, 204, "", "text/plain");
+            }
+            send(res, 200, JSON.stringify(await readKodSources(kodDir, repoRoot)), "application/json");
           } catch (e) {
             send(res, 500, (e as Error).message, "text/plain");
           }
@@ -43,6 +51,17 @@ export function roomsApi(dir: string, repoRoot: string): Plugin {
               res.setHeader("Content-Type", "application/octet-stream");
               res.end(bytes);
             } else send(res, 404, "not found", "text/plain");
+          } catch (e) {
+            send(res, 500, (e as Error).message, "text/plain");
+          }
+        })();
+      });
+      server.middlewares.use("/api/shards/load-kod", (req, res) => {
+        void (async () => {
+          try {
+            if (req.method !== "POST") return send(res, 405, "method not allowed", "text/plain");
+            const { rids } = JSON.parse(await body(req)) as { rids: number[] };
+            send(res, 200, JSON.stringify(await loadKod(repoRoot, rids)), "application/json");
           } catch (e) {
             send(res, 500, (e as Error).message, "text/plain");
           }

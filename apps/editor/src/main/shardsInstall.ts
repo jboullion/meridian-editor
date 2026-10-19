@@ -8,11 +8,13 @@
 // - the run folder's rooms/<name>.roo: what blakserv loads;
 // - meridian-browser's dist/assets, listed in the manifest: what clients load.
 //
-// Only rooms whose source is in Shards' rooms folder are installed, and only
-// their geometry: a new room or a Kod change still goes through
-// tools/shards/install.ts (it builds and reloads the Kod, which saves the game).
+// Only rooms whose source is in Shards' rooms folder are installed. When the
+// editor also changed the room's Kod (its exits), loadKod builds the Kod, reloads
+// it ("reload system", which saves the game: the editor asks first) and has each
+// room list its exits again. A new room still goes through tools/shards/install.ts.
 // Node only; shared by the Electron main process and the Vite dev server.
 
+import { spawn } from "node:child_process";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { getProfile } from "@meridian-editor/roo";
@@ -77,4 +79,49 @@ export async function installRoom(repoRoot: string, path: string, text: string):
     for (const rid of rids) rooms.push({ rid, recreated: false });
   }
   return { roo, bytes: bytes.length, rooms, serverError, ms: Date.now() - t0 };
+}
+
+export interface KodLoadResult {
+  /** The rooms told to list their exits again (room.kod RecreateExits); false where the room isn't loaded. */
+  rooms: { rid: number; reloaded: boolean }[];
+  ms: number;
+}
+
+/**
+ * Put saved Kod changes in the game: build the Kod (server\build.cmd Bkod),
+ * "reload system" (which saves the game), then have the rooms `rids` make
+ * their exits again from the new code.
+ */
+export async function loadKod(repoRoot: string, rids: readonly number[]): Promise<KodLoadResult> {
+  const t0 = Date.now();
+  const paths = shardsPaths(repoRoot);
+  const build = paths && join(paths.browser, "server", "build.cmd");
+  if (!build || !existsSync(build)) throw new Error(`No Kod build script (${build ?? "no Shards checkout"})`);
+  if (process.platform !== "win32") throw new Error("The Kod builds on Windows only (server\build.cmd)");
+  await run("cmd", ["/c", build, "Bkod"], paths!.browser);
+  await maint("reload system");
+  const objects = await findRooms(rids);
+  const again = objects.flatMap((o) => (o === null ? [] : [`send object ${o} RecreateExits`]));
+  if (again.length) await maint(...again);
+  return { rooms: rids.map((rid, i) => ({ rid, reloaded: objects[i] !== null })), ms: Date.now() - t0 };
+}
+
+/** Run a command; on failure, the error carries the end of its output (the Kod compiler's messages). */
+function run(cmd: string, args: string[], cwd: string): Promise<void> {
+  return new Promise((done, fail) => {
+    const child = spawn(cmd, args, { cwd, windowsHide: true });
+    let out = "";
+    const keep = (d: Buffer): void => {
+      out = (out + d.toString("latin1")).slice(-20_000);
+    };
+    child.stdout.on("data", keep);
+    child.stderr.on("data", keep);
+    child.on("error", fail);
+    child.on("close", (code) => {
+      if (code === 0) return done();
+      const lines = out.replace(/\r/g, "").split("\n").filter((l) => l.trim());
+      const errors = lines.filter((l) => /error/i.test(l));
+      fail(new Error(`The Kod didn't build (exit ${code}):\n${(errors.length ? errors : lines).slice(-12).join("\n")}`));
+    });
+  });
 }

@@ -1,6 +1,6 @@
-// Editor state: the open room, its undo history, mode, tool, selection,
-// view settings and preferences. A tiny external store read through
-// useSyncExternalStore.
+// Editor state: the open room (and the Kod files of its class the editor
+// changed), its undo history, mode, tool, selection, view settings and
+// preferences. A tiny external store read through useSyncExternalStore.
 
 import { useSyncExternalStore } from "react";
 import type { RoomSource } from "@meridian-editor/roomc";
@@ -53,16 +53,31 @@ export interface PreviewLight {
   sources: boolean;
 }
 
+/** Kod files the editor changed (its room class's exits), whole, by their path in the Kod folder. */
+export type KodTexts = Readonly<Record<string, string>>;
+
+/** What one undo step puts back. */
+export interface Snapshot {
+  room: RoomSource;
+  kod: KodTexts;
+}
+
 export interface EditorState {
   doc: DocRef | null;
   room: RoomSource | null;
   /** The room as last saved, to tell whether there are unsaved changes. */
   saved: RoomSource | null;
-  undo: RoomSource[];
-  redo: RoomSource[];
+  /** The room's Kod files as edited; a file not here is as on disk. Saved with the room. */
+  kodTexts: KodTexts;
+  /** Their text as last saved (or as read before the first change). */
+  kodSaved: KodTexts;
+  undo: Snapshot[];
+  redo: Snapshot[];
   mode: ItemKind;
   tool: Tool;
   selection: Selection | null;
+  /** The Kod exit picked on the map (its place in the class's exits), apart from `selection`. */
+  kodExit: number | null;
   hover: ItemRef | null;
   target: TargetName;
   view: ViewMode;
@@ -85,6 +100,7 @@ export interface EditorState {
 }
 
 const MAX_UNDO = 200;
+const NO_KOD: KodTexts = Object.freeze({});
 const PREFS_KEY = "meridian-editor.prefs";
 
 export class Store<T> {
@@ -131,11 +147,14 @@ export const editor = new Store<EditorState>({
   doc: null,
   room: null,
   saved: null,
+  kodTexts: NO_KOD,
+  kodSaved: NO_KOD,
   undo: [],
   redo: [],
   mode: "sector",
   tool: "select",
   selection: null,
+  kodExit: null,
   hover: null,
   target: "104",
   view: "split",
@@ -157,10 +176,11 @@ export function useEditor<R>(select: (s: EditorState) => R): R {
   return useSyncExternalStore(editor.subscribe, () => select(editor.get()));
 }
 
-export const isDirty = (s: EditorState): boolean => s.room !== s.saved;
+export const kodDirty = (s: EditorState): boolean => Object.keys(s.kodTexts).some((p) => s.kodTexts[p] !== s.kodSaved[p]);
+export const isDirty = (s: EditorState): boolean => s.room !== s.saved || kodDirty(s);
 
 export function loadRoom(doc: DocRef, room: RoomSource, saved: RoomSource | null = room): void {
-  editor.set({ doc, room, saved, undo: [], redo: [], selection: null, hover: null, issues: null, tool: "select" });
+  editor.set({ doc, room, saved, kodTexts: NO_KOD, kodSaved: NO_KOD, undo: [], redo: [], selection: null, kodExit: null, hover: null, issues: null, tool: "select" });
   requestView({ kind: "fit" });
 }
 
@@ -183,47 +203,82 @@ export function edit(fn: (room: RoomSource) => RoomSource): boolean {
     throw e;
   }
   if (next === room) return false;
-  editor.set({ room: next, undo: [...undo, room].slice(-MAX_UNDO), redo: [], selection: validSelection(next, editor.get().selection) });
+  editor.set({ room: next, undo: [...undo, { room, kod: editor.get().kodTexts }].slice(-MAX_UNDO), redo: [], selection: validSelection(next, editor.get().selection) });
+  return true;
+}
+
+/**
+ * One undoable change to a Kod file of the room's class: `path` in the Kod
+ * folder, whose text is `text` now (as edited, or as on disk).
+ */
+export function editKod(path: string, text: string, fn: (text: string) => string): boolean {
+  const { room, undo, kodTexts, kodSaved } = editor.get();
+  if (!room) return false;
+  let next: string;
+  try {
+    next = fn(text);
+  } catch (e) {
+    if (e instanceof OpError) {
+      notify(e.message, "error");
+      return false;
+    }
+    throw e;
+  }
+  if (next === text) return false;
+  editor.set({
+    kodTexts: { ...kodTexts, [path]: next },
+    // The first change keeps the text from disk, to tell when undo gets back to it.
+    kodSaved: path in kodSaved ? kodSaved : { ...kodSaved, [path]: text },
+    // Undo puts this text back even after a save has changed the file.
+    undo: [...undo, { room, kod: { ...kodTexts, [path]: text } }].slice(-MAX_UNDO),
+    redo: [],
+  });
   return true;
 }
 
 // A gesture (such as a drag) changes the room many times but undoes in one step.
-let gestureStart: RoomSource | null = null;
+let gestureStart: Snapshot | null = null;
 
 export function beginGesture(): void {
-  gestureStart = editor.get().room;
+  const { room, kodTexts } = editor.get();
+  gestureStart = room && { room, kod: kodTexts };
 }
 
 export function previewEdit(fn: (room: RoomSource) => RoomSource): void {
   if (!editor.get().room || !gestureStart) return;
-  editor.set({ room: fn(gestureStart) });
+  editor.set({ room: fn(gestureStart.room) });
 }
 
 export function endGesture(): void {
   const start = gestureStart;
   gestureStart = null;
   const { room, undo } = editor.get();
-  if (!start || room === start) return;
+  if (!start || room === start.room) return;
   editor.set({ undo: [...undo, start].slice(-MAX_UNDO), redo: [] });
 }
 
 export function undo(): void {
-  const { room, undo, redo } = editor.get();
+  const { room, kodTexts, undo, redo } = editor.get();
   const prev = undo[undo.length - 1];
   if (!room || !prev) return;
-  editor.set({ room: prev, undo: undo.slice(0, -1), redo: [...redo, room], selection: validSelection(prev, editor.get().selection) });
+  editor.set({ room: prev.room, kodTexts: prev.kod, undo: undo.slice(0, -1), redo: [...redo, { room, kod: kodTexts }], selection: validSelection(prev.room, editor.get().selection) });
 }
 
 export function redo(): void {
-  const { room, undo, redo } = editor.get();
+  const { room, kodTexts, undo, redo } = editor.get();
   const next = redo[redo.length - 1];
   if (!room || !next) return;
-  editor.set({ room: next, redo: redo.slice(0, -1), undo: [...undo, room], selection: validSelection(next, editor.get().selection) });
+  editor.set({ room: next.room, kodTexts: next.kod, redo: redo.slice(0, -1), undo: [...undo, { room, kod: kodTexts }], selection: validSelection(next.room, editor.get().selection) });
 }
 
 export function select(selection: Selection | null): void {
   if (selection && selection.indices.length === 0) selection = null;
-  editor.set(selection && selection.kind !== editor.get().mode ? { selection, mode: selection.kind } : { selection });
+  editor.set(selection && selection.kind !== editor.get().mode ? { selection, kodExit: null, mode: selection.kind } : { selection, kodExit: null });
+}
+
+/** Pick a Kod exit on the map (null for none); it takes the place of the selection. */
+export function selectKodExit(index: number | null): void {
+  editor.set(index === null ? { kodExit: null } : { kodExit: index, selection: null });
 }
 
 export function selectOne(ref: ItemRef | null): void {

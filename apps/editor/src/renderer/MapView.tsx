@@ -1,7 +1,9 @@
 // The 2D map. Grid, sector fills (from the compiled BSP), linedefs, vertices,
-// things, and where the room's Kod puts things (read-only); plus the editing tools:
+// things, and where the room's Kod puts things; plus the editing tools:
 //   select     click / shift-click / box-drag to select in the current mode,
-//              drag the selection to move it, right-click for operations
+//              drag the selection to move it, right-click for operations.
+//              A Kod exit's label, or its square where nothing else is, picks
+//              the exit: drag it to another square, double-click to edit it.
 //   draw       click points; click the first point to close a sector, double-
 //              click or Enter to finish an open line, Backspace to undo a point
 //   rectangle, polygon, circle   drag out a shape
@@ -10,10 +12,12 @@
 
 import { useEffect, useRef } from "react";
 import type { RoomSource } from "@meridian-editor/roomc";
+import { changeKodExit, runCommand } from "./commands.tsx";
 import { openContextMenu } from "./ContextMenu.tsx";
 import { compiled } from "./compiler.ts";
-import { distanceToSegment, roomBounds, sectorAt, sectorPieces, type SectorPiece } from "./geometry.ts";
+import { distanceToSegment, kodCoords, roomBounds, sectorAt, sectorPieces, type SectorPiece } from "./geometry.ts";
 import { dlightScale, isHighlight, lightColor } from "./kod/kodLights.ts";
+import { exitSpec } from "./kod/kodEdit.ts";
 import { kodToEditor, type KodRoom } from "./kod/kodRooms.ts";
 import { currentKodRoom, kod, kodMarks, roomBox, roomLights } from "./kod/kodStore.ts";
 import { clientToEditor, walk } from "./preview/walkStore.ts";
@@ -21,6 +25,7 @@ import { insertPath } from "./ops/draw.ts";
 import { addThing, autoMerge, moveItems, verticesOf } from "./ops/edit.ts";
 import { nearestOnSegment, sectorAtPoint, type Pt } from "./ops/geom.ts";
 import { circleSides, insertShape, insertTorch, polygonPoints, rectanglePoints } from "./ops/shapes.ts";
+import { OpError } from "./ops/types.ts";
 import {
   beginGesture,
   cursor,
@@ -31,6 +36,7 @@ import {
   notify,
   previewEdit,
   select,
+  selectKodExit,
   selectOne,
   toggleSelected,
   type EditorState,
@@ -70,6 +76,8 @@ type Interaction =
   | { mode: "press"; sx: number; sy: number; wx: number; wy: number; hit: ItemRef | null; additive: boolean }
   | { mode: "move"; wx: number; wy: number; sel: Selection; dx: number; dy: number }
   | { mode: "box"; x0: number; y0: number; x1: number; y1: number; additive: boolean }
+  | { mode: "kodpress"; sx: number; sy: number; index: number }
+  | { mode: "kodmove"; index: number; row: number; col: number }
   | { mode: "shape"; x0: number; y0: number; x1: number; y1: number };
 
 export function MapView(): React.JSX.Element {
@@ -184,6 +192,35 @@ export function MapView(): React.JSX.Element {
         if (s !== null && s < room.sectors.length) best = { kind, index: s };
       }
       return best;
+    };
+
+    /** The room's class and box, when its Kod is shown. */
+    const kodShown = (): { k: KodRoom; box: { left: number; top: number } } | null => {
+      const room = editor.get().room;
+      const k = kod.get().show ? currentKodRoom().room : null;
+      const box = room && roomBox(room.things);
+      return k && box ? { k, box } : null;
+    };
+
+    /** The Kod exit at a point: by its label (in any mode), or by its square. The last listed wins, as in Kod. */
+    const pickKodExit = (px: number, py: number): { index: number; label: boolean } | null => {
+      const g = kodShown();
+      if (!g) return null;
+      const [x, y] = toWorld(px, py);
+      let square: number | null = null;
+      ctx.font = LABEL_FONT;
+      for (let i = g.k.exits.length - 1; i >= 0; i--) {
+        const e = g.k.exits[i]!;
+        const left = g.box.left + (e.col - 1) * 64;
+        const top = g.box.top - (e.row - 1) * 64;
+        if (view.scale > LABEL_SCALE) {
+          const lx = sx(left) + 2;
+          const ly = sy(top) + 12;
+          if (px >= lx - 2 && px <= lx + ctx.measureText(exitLabel(e)).width + 2 && py >= ly - 10 && py <= ly + 3) return { index: i, label: true };
+        }
+        if (square === null && x >= left && x < left + 64 && y <= top && y > top - 64) square = i;
+      }
+      return square === null ? null : { index: square, label: false };
     };
 
     const inBox = (room: RoomSource, kind: ItemKind, x0: number, y0: number, x1: number, y1: number): number[] => {
@@ -327,7 +364,22 @@ export function MapView(): React.JSX.Element {
       if (kod.get().show) {
         const k = currentKodRoom().room;
         const box = roomBox(room.things);
-        if (k && box && t0 && t1) drawKod(ctx, k, { ...box, right: Math.max(t0.x, t1.x), bottom: Math.min(t0.y, t1.y) }, view, sx, sy);
+        if (k && box && t0 && t1) {
+          drawKod(ctx, k, { ...box, right: Math.max(t0.x, t1.x), bottom: Math.min(t0.y, t1.y) }, view, sx, sy, state.kodExit);
+          // Where a dragged exit would go.
+          if (act.mode === "kodmove") {
+            const s = 64 * view.scale;
+            const x = sx(box.left + (act.col - 1) * 64);
+            const y = sy(box.top - (act.row - 1) * 64);
+            ctx.save();
+            ctx.setLineDash([5, 4]);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = COLORS.selected;
+            ctx.strokeRect(x, y, s, s);
+            ctx.restore();
+            label(ctx, `row ${act.row}, col ${act.col}`, x + 2, y + s + 14);
+          }
+        }
       }
 
       // The walker, in walk mode: a dot with the way it faces.
@@ -449,8 +501,10 @@ export function MapView(): React.JSX.Element {
       }
       if (e.button === 2) {
         // Right-click: select what's under the cursor (unless it's already selected) and offer operations.
-        const hit = pick(px, py);
-        if (hit && !isSelected(state.selection, hit)) selectOne(hit);
+        const exit = state.tool === "select" ? pickKodExit(px, py) : null;
+        const hit = exit?.label ? null : pick(px, py);
+        if (exit && !hit) selectKodExit(exit.index);
+        else if (hit && !isSelected(state.selection, hit)) selectOne(hit);
         openContextMenu(e.clientX, e.clientY);
         return;
       }
@@ -503,7 +557,14 @@ export function MapView(): React.JSX.Element {
           return;
         }
         default: {
-          const hit = pick(px, py);
+          const exit = pickKodExit(px, py);
+          const hit = exit?.label ? null : pick(px, py);
+          if (exit && !hit) {
+            selectKodExit(exit.index);
+            if (e.detail >= 2) runCommand("kod.editExit");
+            else act = { mode: "kodpress", sx: px, sy: py, index: exit.index };
+            return;
+          }
           const additive = e.shiftKey || e.ctrlKey || e.metaKey;
           if (hit && additive) {
             toggleSelected(hit);
@@ -553,6 +614,13 @@ export function MapView(): React.JSX.Element {
           act.x1 = x;
           act.y1 = y;
           return request();
+        case "kodpress":
+        case "kodmove": {
+          if (act.mode === "kodpress" && Math.hypot(px - act.sx, py - act.sy) < 4) return;
+          const at = state.room && kodCoords(state.room, x, y);
+          if (at) act = { mode: "kodmove", index: act.index, row: Math.max(1, at.row), col: Math.max(1, at.col) };
+          return request();
+        }
         case "shape": {
           const s = snapPoint(x, y);
           act.x1 = s.p[0];
@@ -592,6 +660,17 @@ export function MapView(): React.JSX.Element {
         select({ kind: state.mode, indices: [...new Set([...prev, ...found])] });
       } else if (act.mode === "press" && !act.hit && !act.additive && e.button === 0) select(null);
       else if (act.mode === "shape") commitShape(act.x0, act.y0, act.x1, act.y1);
+      else if (act.mode === "kodmove") {
+        const e = currentKodRoom().room?.exits[act.index];
+        if (e && (e.row !== act.row || e.col !== act.col)) {
+          try {
+            changeKodExit(act.index, { ...exitSpec(e), row: act.row, col: act.col });
+          } catch (err) {
+            if (!(err instanceof OpError)) throw err;
+            notify(err.message, "error");
+          }
+        }
+      }
       act = { mode: "idle" };
       request();
     };
@@ -677,8 +756,12 @@ export function MapView(): React.JSX.Element {
   return <canvas ref={canvasRef} className="map-canvas" tabIndex={0} aria-label="Room map" />;
 }
 
+const LABEL_FONT = "11px system-ui, sans-serif";
+/** Labels show from this zoom (pixels a unit) up. */
+const LABEL_SCALE = 0.9;
+
 function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
-  ctx.font = "11px system-ui, sans-serif";
+  ctx.font = LABEL_FONT;
   ctx.fillStyle = "rgba(0,0,0,0.6)";
   const w = ctx.measureText(text).width;
   ctx.fillRect(x - 2, y - 10, w + 4, 13);
@@ -695,7 +778,12 @@ const KOD_COLORS = {
   arrival: "rgba(255, 230, 90, 0.95)",
 };
 
-/** The room's Kod placements: exits fill their square, the rest are marks at their exact spot. */
+/** An exit's label on the map: where it leads, or that it's locked. */
+function exitLabel(e: KodRoom["exits"][number]): string {
+  return e.dest === null ? "locked door" : `exit to ${e.dest}${e.destRow !== undefined ? ` (${e.destRow}, ${e.destCol})` : ""}`;
+}
+
+/** The room's Kod placements: exits fill their square (the picked one outlined), the rest are marks at their exact spot. */
 function drawKod(
   ctx: CanvasRenderingContext2D,
   k: KodRoom,
@@ -703,18 +791,21 @@ function drawKod(
   v: View,
   sx: (x: number) => number,
   sy: (y: number) => number,
+  picked: number | null,
 ): void {
   const s = 64 * v.scale;
   ctx.save();
-  ctx.lineWidth = 1.5;
-  for (const e of k.exits) {
+  k.exits.forEach((e, i) => {
     const color = e.dest === null ? KOD_COLORS.locked : KOD_COLORS.exit;
     const x = sx(box.left + (e.col - 1) * 64);
     const y = sy(box.top - (e.row - 1) * 64);
-    ctx.fillStyle = color.replace("0.95", "0.22");
+    ctx.fillStyle = color.replace("0.95", i === picked ? "0.4" : "0.22");
     ctx.fillRect(x, y, s, s);
-    ctx.strokeStyle = color;
+    ctx.lineWidth = i === picked ? 3 : 1.5;
+    ctx.strokeStyle = i === picked ? COLORS.selected : color;
     ctx.strokeRect(x, y, s, s);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = color;
     if (e.dest === null && s > 10) {
       ctx.beginPath();
       ctx.moveTo(x + 3, y + 3);
@@ -723,7 +814,7 @@ function drawKod(
       ctx.lineTo(x + 3, y + s - 3);
       ctx.stroke();
     }
-  }
+  });
   // Edge exits: a dashed bar just outside that side of the room box.
   ctx.save();
   ctx.strokeStyle = KOD_COLORS.exit;
@@ -786,7 +877,7 @@ function drawKod(
     ctx.stroke();
   }
   // Labels once there's room for them.
-  if (v.scale > 0.9) {
+  if (v.scale > LABEL_SCALE) {
     for (const m of kodMarks(k, box)) {
       if (m.kind === "exit" || m.kind === "locked") label(ctx, m.label, sx(box.left + (m.col - 1) * 64) + 2, sy(box.top - (m.row - 1) * 64) + 12);
       else if (m.kind !== "object" || v.scale > 1.6) label(ctx, m.label, sx(m.x) + 7, sy(m.y) + 4);

@@ -91,6 +91,15 @@ On macOS, use Cmd for Ctrl. Single-key shortcuts don't work while you're typing 
 | Home | Look straight ahead |
 | Esc | Stop walking |
 
+## Kod exits
+
+With a Kod exit or locked door picked on the map:
+
+| Keys | Command |
+|---|---|
+| Enter | Edit Kod exit… |
+| Del | Delete Kod exit |
+
 ## Vertices
 
 | Keys | Command |

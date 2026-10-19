@@ -17,10 +17,13 @@
 - **Walk mode** (`src/renderer/preview/walker.ts`) ports meridian-browser's `PlayerMover` (its `move.c` port), without the server, object and sound parts. `walker.test.ts` checks it frame by frame against `PlayerMover`; change the two together.
 - **Preview lighting** (`src/renderer/preview/lighting.ts`, `gameLight.ts`): the shader ports meridian-browser's `packages/render/src/lighting.ts` (without enhanced lighting or light sources). The light values at a game hour follow the server's Kod; `kodRoomLight` reads a class's light properties through its parents. Keep the formulas in step with both.
 - **Light sources** (`src/renderer/kod/kodLights.ts`): what each placed object's `SendLightingInformation` would send, worked out from Kod (flickerer classes, ornaments, signs, news globes). The host reads those object files (`src/main/kod.ts LIGHT_OBJECTS`). The shader's light maps follow meridian-browser's `lighting.ts`.
-- **Kod placements** (`src/renderer/kod`): `kodRooms.ts` parses the server's room classes (exits, generators, `NewHold`, ornament lists, sounds) with regexes, read-only. The Kod comes from the host (`readKod`, `src/main/kod.ts`), like textures.
+- **Kod placements** (`src/renderer/kod`): `kodRooms.ts` parses the server's room classes (exits, generators, `NewHold`, ornament lists, sounds) with regexes. The Kod comes from the host (`readKod`, `src/main/kod.ts`), like textures.
+  - Exits and locked doors are the one thing the editor changes (ADR 0001 decision 5). `kodEdit.ts` rewrites a class's `plExits` lines as text; `exitStatements` in `kodRooms.ts` finds them for both, so they agree on which exit is which.
+  - The changed file is held in `store.ts` (`kodTexts`, in the undo snapshots with the room) and written on save through the host's `writeKod`, which refuses a file that changed on disk since it was read.
 - **Install on save** (`src/main/shardsInstall.ts`, `src/renderer/shardsInstall.ts`):
   - Saving a room whose source is in Shards' rooms folder compiles it and writes the `.roo` to shards-server's `resource/rooms`, the run folder and `dist/assets`.
   - It then has blakserv `Recreate` every room the Kod builds from that file.
+  - If the save changed the room's Kod, the page asks, then `loadKod` builds the Kod, runs `reload system` and sends the room `RecreateExits` (Electron `shards:load-kod`, web `POST /api/shards/load-kod`).
   - The Electron bridge (`shards:install`) and the web build's `POST /api/shards/install` both call it. `src/main/shardsServer.ts` holds the maintenance port and manifest helpers, shared with `tools/shards`.
   - The game's admin console opens rooms here through the agent endpoint's `load` (meridian-browser `tools/dev/devTools.ts`), so keep `load` working for it.
 - **Testing in Shards** (`tools/shards`): `shards:install` puts a room on the local Shards server; `shards:walk` walks it.
@@ -36,7 +39,7 @@
   - Tools call the pure functions in `src/renderer/ops` (and `kod`, `preview/walker.ts`), never `commands.tsx`, whose commands open dialogs. So the renderer modules they import must stay free of the DOM and the store.
   - A new command needs an entry in `packages/agent/src/coverage.ts`: the tools that do it, or why there are none. `coverage.test.ts` fails without one.
   - `tools.test.ts` rebuilds `edtest` through the tools and expects `make-edtest.ts`'s output byte for byte.
-  - Kod writers (`kod_*`) touch only `rooms/new/<room>.kod`. `shards_install` needs `confirmed: true` each time (ask the user); `shards_walk` only ever logs in as `shardpal`.
+  - Kod writers (`kod_*`) touch only `rooms/new/<room>.kod`; the exit ones share `kodEdit.ts` with the editor. `shards_install` needs `confirmed: true` each time (ask the user); `shards_walk` only ever logs in as `shardpal`.
   - Live mode (`connect_editor`): the editor serves `src/main/agentEndpoint.ts` from the main process and from the Vite dev server (`scripts/agentApi.ts`); keep the two in step, like `host.ts`. The page answers in `src/renderer/agent.ts`; the calls are typed in `src/main/agentProtocol.ts`. Room logic stays in the agent: the page only reports its state and takes the edited room back as one undo step.
 - **Planned work** is in `TODO.md` (code signing, auto-updates through GitHub releases).
 - **Before committing:** `npm run check`.

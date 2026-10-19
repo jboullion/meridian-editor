@@ -1,6 +1,6 @@
 // Where a room's Kod puts things, read from the room classes' source so the
-// map can show it. Kod stays the source of truth (ADR 0001 decision 5); this is
-// read-only. A room class looks like:
+// map can show it. Kod stays the source of truth (ADR 0001 decision 5); this
+// only reads (kodEdit.ts changes exits). A room class looks like:
 //
 //   resources:   room_raza = raza.roo
 //   properties:  prRoom = room_raza
@@ -40,6 +40,10 @@ export interface KodExit extends KodPlace {
   dest: string | null;
   destRow?: number;
   destCol?: number;
+  /** How it turns the player (ROTATE_NONE ...), as written. */
+  rotate?: string;
+  /** A locked door's message resource, if it names one (else the server's "the door is locked"). */
+  message?: string;
 }
 
 export interface KodEdgeExit {
@@ -91,9 +95,33 @@ export function parseRids(khd: string): Map<string, number> {
   return rids;
 }
 
-/** Blank out comments, keeping every newline so line numbers still match. */
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (c) => c.replace(/[^\n]/g, " "));
+/** Blank out comments, keeping every character's place so line numbers and offsets still match. */
+export function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g, (c) => c.replace(/[^\r\n]/g, " "));
+}
+
+/** One `plExits = Cons([ row, col, ... ],plExits);` statement. */
+export interface ExitStatement {
+  /** Where the statement starts and ends (after its ";"), and the brackets around its fields. */
+  start: number;
+  end: number;
+  open: number;
+  close: number;
+  /** The fields, trimmed: row, col, then the RID (or ROOM_LOCKED_DOOR) and the rest. */
+  fields: string[];
+}
+
+/** The exits a class lists, in file order, from its comment-stripped source (stripComments). */
+export function exitStatements(src: string): ExitStatement[] {
+  const out: ExitStatement[] = [];
+  for (const m of src.matchAll(/\bplExits\s*=\s*Cons\s*\(\s*\[([^\]]*)\]/gi)) {
+    const fields = m[1]!.split(",").map((s) => s.trim());
+    if (!/^-?\d+$/.test(fields[0] ?? "") || !/^-?\d+$/.test(fields[1] ?? "") || !fields[2]) continue;
+    const close = m.index + m[0].length - 1;
+    const tail = /^\s*,\s*plExits\s*\)\s*;/i.exec(src.slice(close + 1));
+    out.push({ start: m.index, end: close + 1 + (tail ? tail[0].length : 0), open: m.index + m[0].lastIndexOf("["), close, fields });
+  }
+  return out;
 }
 
 const HALF = 32;
@@ -124,15 +152,23 @@ export function parseKodRoom(file: KodSourceFile, rids: ReadonlyMap<string, numb
   const teleport = tRow && tCol ? { row: Number(tRow[1]), col: Number(tCol[1]), fineRow: HALF, fineCol: HALF, line: lineAt(tRow.index) } : null;
 
   const exits: KodExit[] = [];
-  for (const m of src.matchAll(/\bplExits\s*=\s*Cons\s*\(\s*\[([^\]]*)\]/gi)) {
-    const parts = m[1]!.split(",").map((s) => s.trim());
-    const row = num(parts[0]);
-    const col = num(parts[1]);
-    if (row === undefined || col === undefined || !parts[2]) continue;
+  for (const s of exitStatements(src)) {
+    const parts = s.fields;
     const locked = parts[2] === "ROOM_LOCKED_DOOR" || parts[2] === "-1";
     const destRow = locked ? undefined : num(parts[3]);
     const destCol = locked ? undefined : num(parts[4]);
-    exits.push({ row, col, fineRow: HALF, fineCol: HALF, line: lineAt(m.index), dest: locked ? null : parts[2], ...(destRow !== undefined && destCol !== undefined ? { destRow, destCol } : {}) });
+    exits.push({
+      row: Number(parts[0]),
+      col: Number(parts[1]),
+      fineRow: HALF,
+      fineCol: HALF,
+      line: lineAt(s.start),
+      dest: locked ? null : parts[2]!,
+      ...(destRow !== undefined && destCol !== undefined ? { destRow, destCol } : {}),
+      ...(!locked && parts[5] ? { rotate: parts[5] } : {}),
+      // room.kod SomethingTryGo shows the 4th field only when there are exactly 4.
+      ...(locked && parts.length === 4 && parts[3] ? { message: parts[3] } : {}),
+    });
   }
 
   const edgeExits: KodEdgeExit[] = [];

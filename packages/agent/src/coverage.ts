@@ -96,6 +96,11 @@ export const COMMAND_COVERAGE: Record<string, Coverage> = {
   "sector.floorSlope": t("add_slope", "set_slope"),
   "sector.ceilingSlope": t("add_slope", "set_slope"),
 
+  // Kod exits: the agent writes only the open room's own Kod (rooms/new/<room>.kod), never the server's
+  "kod.editExit": t("kod_set_exit"),
+  "kod.deleteExit": t("kod_remove_exit"),
+  "kod.addExit": t("kod_add_exit"),
+
   // Search
   "search.find": t("find_items", "set_properties"),
   "search.jump": t("get_items", "describe_sector", "describe_linedef"),
