@@ -13,6 +13,7 @@ import { listRooms } from "./roomsFs.ts";
 import { installRoom, isShardsRoom, loadKod } from "./shardsInstall.ts";
 import { defaultRoomsDir } from "./shardsPaths.ts";
 import { listTextures, readResource, readTexture } from "./textures.ts";
+import { checkForUpdates, installUpdate, setupUpdates, showAbout, updateState } from "./updates.ts";
 
 const devUrl = process.env.EDITOR_DEV_URL;
 // In development the app path is apps/editor, and the rooms are the Shards server's room
@@ -167,6 +168,16 @@ function buildMenu(): void {
         { role: "togglefullscreen" },
       ],
     },
+    {
+      role: "help",
+      label: "&Help",
+      submenu: [
+        item("Check for Updates…", "help.checkUpdates"),
+        item("Restart to Update", "help.installUpdate"),
+        { type: "separator" },
+        item("About Meridian Room Editor", "help.about"),
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -234,6 +245,10 @@ function registerIpc(): void {
     pageReady = true;
     for (const f of waiting.splice(0)) void openPath(f);
   });
+  ipcMain.handle("update:state", () => updateState());
+  ipcMain.on("update:check", () => void checkForUpdates());
+  ipcMain.on("update:install", () => installUpdate());
+  ipcMain.on("app:about", () => showAbout());
   ipcMain.on("agent:reply", (_e, id: number, reply: AgentReply) => agentCalls.settle(id, reply));
   ipcMain.on("window:title", (_e, title: string) => win?.setTitle(title));
   ipcMain.on("window:dirty", (_e, value: boolean) => {
@@ -367,6 +382,13 @@ void app.whenReady().then(() => {
   buildMenu();
   registerIpc();
   createWindow();
+  setupUpdates({
+    window: () => win,
+    dirty: () => dirty,
+    discardChanges: () => {
+      dirty = false;
+    },
+  });
   startAgents().catch((e: unknown) => console.error("agent endpoint:", e));
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

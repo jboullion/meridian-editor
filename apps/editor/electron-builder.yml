@@ -37,6 +37,14 @@ electronFuses:
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
 
+# Releases and the update feed (latest*.yml, read by src/main/updates.ts): a draft GitHub
+# release, filled by .github/workflows/release.yml and published once every OS is there.
+publish:
+  provider: github
+  owner: jboullion
+  repo: meridian-editor
+  releaseType: draft
+
 win:
   target:
     - target: nsis

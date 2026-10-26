@@ -4,15 +4,27 @@
 
 ### Windows
 
+Download the installer for your system from the [releases page](https://github.com/jboullion/meridian-editor/releases) (the newest release is at the top).
+
 1. Run `Meridian-Room-Editor-Setup-<version>.exe`.
 2. The installer isn't code-signed yet, so Windows SmartScreen may warn about an unrecognised app. Choose **More info**, then **Run anyway**.
 3. Pick a folder, or keep the default. The editor installs for your user only, and adds a desktop shortcut.
 
 ### macOS and Linux
 
-The editor builds as a DMG (macOS) and as an AppImage or `.deb` (Linux), but these aren't published yet. Ask whoever gave you the editor for a build.
+- **macOS:** open `Meridian-Room-Editor-<version>-mac.dmg` and drag the editor to Applications. It isn't signed yet, so the first time, right-click it in Applications and choose **Open**, then **Open** again.
+- **Linux:** the `.AppImage` runs as it is (make it executable first: `chmod +x`), or install the `.deb` with your package manager.
 
 On macOS and Linux there's no default textures folder. Set one in Preferences (see [Textures](#textures) below).
+
+### Updating
+
+The editor checks for a new version each time it starts.
+
+- **Windows and the Linux AppImage:** it downloads the new version in the background, and the status bar says when it's ready. It installs when you quit the editor, or right away from **Help → Restart to Update**. If the room has unsaved changes, the editor asks first.
+- **macOS and the `.deb`:** the status bar says a new version is out. **Help → Check for Updates** opens its download page; install it the way you installed this one.
+
+**Help → Check for Updates** checks again at any time, and **Help → About** shows which version you have.
 
 ## First launch
 

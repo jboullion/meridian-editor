@@ -27,7 +27,9 @@
     "editor": "npm run dev -w @meridian-editor/app",
     "editor:web": "npm run web -w @meridian-editor/app",
     "editor:pack": "npm run pack -w @meridian-editor/app",
-    "editor:dist": "npm run dist -w @meridian-editor/app"
+    "editor:dist": "npm run dist -w @meridian-editor/app",
+    "editor:release": "npm run release -w @meridian-editor/app",
+    "release": "node tools/release/release.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

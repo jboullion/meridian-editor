@@ -3,7 +3,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentCall } from "./agentProtocol.ts";
-import type { EditorBridge, MenuCommand, OpenedFile } from "./bridge.ts";
+import type { EditorBridge, MenuCommand, OpenedFile, UpdateState } from "./bridge.ts";
 
 const bridge: EditorBridge = {
   platform: process.platform,
@@ -45,6 +45,17 @@ const bridge: EditorBridge = {
       ipcRenderer.off("agent:call", listener);
     };
   },
+  onUpdate: (fn) => {
+    const listener = (_e: unknown, state: UpdateState): void => fn(state);
+    ipcRenderer.on("update:state", listener);
+    void ipcRenderer.invoke("update:state").then(fn);
+    return () => {
+      ipcRenderer.off("update:state", listener);
+    };
+  },
+  checkForUpdates: () => ipcRenderer.send("update:check"),
+  installUpdate: () => ipcRenderer.send("update:install"),
+  showAbout: () => ipcRenderer.send("app:about"),
   onMenu: (fn) => {
     const listener = (_e: unknown, command: MenuCommand): void => fn(command);
     ipcRenderer.on("menu", listener);

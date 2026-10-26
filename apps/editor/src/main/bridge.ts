@@ -14,6 +14,15 @@ export interface OpenedFile {
 /** A command id from the renderer's command registry (commands.ts), sent by the native menu. */
 export type MenuCommand = string;
 
+/** Where an installed editor is with updates (updates.ts). */
+export type UpdateState =
+  | { state: "idle" | "checking" }
+  | { state: "current"; version: string }
+  | { state: "downloading" | "ready"; version: string }
+  /** Out, but this build can't install it itself (macOS, a deb): `url` is its release page. */
+  | { state: "available"; version: string; url: string }
+  | { state: "error"; message: string };
+
 export interface EditorBridge {
   platform: string;
   roomsDir(): Promise<string>;
@@ -46,4 +55,10 @@ export interface EditorBridge {
   loadKod(rids: number[]): Promise<KodLoadResult>;
   /** Calls from an agent (agentEndpoint.ts), answered by the page. */
   onAgentCall(fn: (call: AgentCall) => Promise<AgentReply>): () => void;
+  /** Update news (updates.ts), starting with the current state. */
+  onUpdate(fn: (state: UpdateState) => void): () => void;
+  checkForUpdates(): void;
+  /** Restart into a downloaded update (asks first if the room has unsaved changes). */
+  installUpdate(): void;
+  showAbout(): void;
 }

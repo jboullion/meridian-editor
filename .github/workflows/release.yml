@@ -1,0 +1,144 @@
+# Builds the editor's installers on Windows, macOS and Linux, uploads them with the update
+# feeds (latest*.yml, read by apps/editor/src/main/updates.ts) to a draft GitHub release for
+# v<version> (apps/editor/package.json), and publishes that release once every OS is there.
+# After the Shards desktop app's "Desktop builds" (meridian-browser .github/workflows/desktop.yml).
+#
+# Start it with `npm run release -- <x.y.z>` (tools/release/release.ts: sets the version,
+# tags, pushes and follows this run), or push a v<version> tag yourself. Running it from the
+# Actions tab builds and checks the current version without publishing.
+
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # One draft for the three builds to upload into (each making its own can race into duplicates)
+  draft:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "Meridian Room Editor $GITHUB_REF_NAME" --generate-notes
+      # Drafts are never public; one left over is a run that failed before publishing
+      - name: Delete drafts of earlier versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' | while read -r tag; do
+            if [ "$tag" != "$GITHUB_REF_NAME" ]; then
+              echo "deleting the draft for $tag"
+              gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes
+            fi
+          done
+
+  # Typecheck, lint and tests. Tests that need the shipped rooms (meridian-unreal) or
+  # meridian-browser beside the repo skip themselves here.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  build:
+    needs: [draft, check]
+    # From the Actions tab there's no tag and no draft (skipped): build only
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag matches the editor's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/editor/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match apps/editor/package.json version $version"
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # On a failure the log's last lines become an error annotation: unlike the log,
+      # annotations can be read without signing in, so tools/release/release.ts prints them
+      - name: Build and upload to the draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! npm run editor:release 2>&1 | tee build.log; then
+            echo "::error title=Build failed::$(tail -n 40 build.log | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN { ORS = "%0A" } { print }')"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Unsigned for now (TODO.md); stops macOS looking for a certificate
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Build only (not a tag)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! npm run editor:dist 2>&1 | tee build.log; then
+            echo "::error title=Build failed::$(tail -n 40 build.log | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN { ORS = "%0A" } { print }')"
+            exit 1
+          fi
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # A run from the Actions tab keeps its installers for a week, to try before releasing
+      - name: Keep the installers (not a tag)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          retention-days: 7
+          path: |
+            apps/editor/release/*.exe
+            apps/editor/release/*.dmg
+            apps/editor/release/*.zip
+            apps/editor/release/*.AppImage
+            apps/editor/release/*.deb
+
+  # Publishes the draft once all three builds uploaded. A failed build leaves the draft
+  # unpublished, so nobody (and no installed editor) gets half a release.
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every OS's files are in the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          names=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          echo "$names"
+          for pattern in '\.exe$' '\.exe\.blockmap$' '-mac\.dmg$' '-mac\.zip$' '\.AppImage$' '\.deb$' '^latest\.yml$' '^latest-mac\.yml$' '^latest-linux\.yml$'; do
+            if ! grep -Eq -- "$pattern" <<< "$names"; then
+              echo "::error::The release has no file matching $pattern"
+              exit 1
+            fi
+          done
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest

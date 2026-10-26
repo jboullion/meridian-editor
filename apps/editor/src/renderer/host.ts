@@ -2,12 +2,12 @@
 // in the app, or the Vite dev server's /api/rooms plus downloads in a browser.
 
 import type { AgentCall, AgentReply } from "../main/agentProtocol.ts";
-import type { EditorBridge, MenuCommand } from "../main/bridge.ts";
+import type { EditorBridge, MenuCommand, UpdateState } from "../main/bridge.ts";
 import type { InstallResult, KodLoadResult } from "../main/shardsInstall.ts";
 
 export type { InstallResult, KodLoadResult };
 
-export type { MenuCommand };
+export type { MenuCommand, UpdateState };
 
 export interface RoomEntry {
   /** Pass back to readRoom / writeRoom. */
@@ -58,6 +58,11 @@ export interface Host {
   onOpenFile(fn: (file: OpenedFile) => void): () => void;
   /** Calls from an agent (packages/agent), through the main process or the dev server. */
   onAgentCall(fn: (call: AgentCall) => Promise<AgentReply>): () => void;
+  /** Update news from an installed editor (main/updates.ts); never called in a browser. */
+  onUpdate(fn: (state: UpdateState) => void): () => void;
+  checkForUpdates(): void;
+  installUpdate(): void;
+  showAbout(): void;
 }
 
 let texturesDir = "";
@@ -116,6 +121,10 @@ function electronHost(bridge: EditorBridge): Host {
       return off;
     },
     onAgentCall: (fn) => bridge.onAgentCall(fn),
+    onUpdate: (fn) => bridge.onUpdate(fn),
+    checkForUpdates: () => bridge.checkForUpdates(),
+    installUpdate: () => bridge.installUpdate(),
+    showAbout: () => bridge.showAbout(),
   };
 }
 
@@ -212,6 +221,11 @@ function browserHost(): Host {
       hot.on("meridian:agent", listener);
       return () => hot.off("meridian:agent", listener);
     },
+    // The web build is the dev server's: it updates with the repo.
+    onUpdate: () => () => {},
+    checkForUpdates: () => window.alert("The web build runs from the repo: pull to update it."),
+    installUpdate: () => window.alert("The web build runs from the repo: pull to update it."),
+    showAbout: () => window.alert("Meridian Room Editor (web build, from the repo)\nLicensed under the GPL, version 2."),
   };
 }
 

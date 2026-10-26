@@ -32,6 +32,7 @@
   - Test with `shardpal`, never an account someone is playing (`who` on the maintenance port shows them). The user often plays on the local server.
   - The 104 server doesn't check players against walls, steps or ceilings; the client does (`move.c`). So the walk test drives Shards' `PlayerMover`, and a missing server snap-back proves nothing.
 - **Installers** (`apps/editor/electron-builder.yml`, `npm run editor:dist`): output goes to `apps/editor/release/` (git-ignored; `dist/` is the renderer build). Everything the app needs is bundled, so its dependencies are all devDependencies. Packaged, `main.ts` has no repo: folders come from `settings.json` in userData, and the Kod folder from Preferences.
+  - Releases: `npm run release -- <x.y.z>` (`tools/release/release.ts`) tags `v<x.y.z>`, and `.github/workflows/release.yml` builds every OS into a draft GitHub release and publishes it once complete. Installed editors update from it (`src/main/updates.ts`); development and `editor:pack` builds have no feed and never check. Pushing a tag publishes to everyone: ask the user first.
   - Files the system opens (argv, a second launch through the single-instance lock, macOS `open-file`) go to the page as `file:opened` once it says `file:ready`. In the renderer they go through `actions.ts openFromSystem`.
   - The association is "Open with" for `.json` and `.roo`, never the default. Windows has only last-extension associations, so `.room.json` is `.json`. Windows: `build/installer.nsh`; macOS and Linux: `electron-builder.yml`.
   - Development runs use a separate userData folder (`Meridian Room Editor (dev)`), so they don't share settings or the single-instance lock with an installed editor.
@@ -41,5 +42,5 @@
   - `tools.test.ts` rebuilds `edtest` through the tools and expects `make-edtest.ts`'s output byte for byte.
   - Kod writers (`kod_*`) touch only `rooms/new/<room>.kod`; the exit ones share `kodEdit.ts` with the editor. `shards_install` needs `confirmed: true` each time (ask the user); `shards_walk` only ever logs in as `shardpal`.
   - Live mode (`connect_editor`): the editor serves `src/main/agentEndpoint.ts` from the main process and from the Vite dev server (`scripts/agentApi.ts`); keep the two in step, like `host.ts`. The page answers in `src/renderer/agent.ts`; the calls are typed in `src/main/agentProtocol.ts`. Room logic stays in the agent: the page only reports its state and takes the edited room back as one undo step.
-- **Planned work** is in `TODO.md` (code signing, auto-updates through GitHub releases).
+- **Planned work** is in `TODO.md` (code signing).
 - **Before committing:** `npm run check`.

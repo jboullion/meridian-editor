@@ -119,4 +119,9 @@ export const COMMAND_COVERAGE: Record<string, Coverage> = {
   // Textures
   "textures.browse": t("list_textures", "view_textures", "textures_in_use"),
   "textures.reload": t("list_textures"),
+
+  // Help
+  "help.checkUpdates": ui("Updating the editor app isn't room work"),
+  "help.installUpdate": ui("Updating the editor app isn't room work"),
+  "help.about": ui("get_status says what the agent is connected to"),
 };

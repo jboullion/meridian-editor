@@ -131,7 +131,7 @@ npm run editor:pack
 ```
 
 - **Windows:** an NSIS installer (`Meridian-Room-Editor-Setup-<version>.exe`). Per-user, with a choice of folder and a desktop shortcut. It isn't code-signed, so Windows SmartScreen warns on first run.
-- **macOS:** a universal DMG and zip. **Linux:** an AppImage and a deb. Each must be built on its own OS. Shards does this with a GitHub workflow (`.github/workflows`), which this repo could copy once it has a GitHub repo.
+- **macOS:** a universal DMG and zip. **Linux:** an AppImage and a deb. Each must be built on its own OS, so releases are built on GitHub (below).
 - **Contents:** only the bundled renderer, main process and preload, under Electron fuses as in Shards (no `--inspect`, no `ELECTRON_RUN_AS_NODE`, asar integrity checked).
 - **Installed, the editor has no repo around it:**
   - Rooms default to `Documents/Meridian Rooms`. The folder you open is remembered, in `settings.json` in the app's data folder (`%APPDATA%/Meridian Room Editor`), as is the export folder.
@@ -142,7 +142,23 @@ npm run editor:pack
   - *macOS:* the editor is an alternate handler for `.json` and `.roo`, under Open With.
   - *Linux:* the editor is offered for JSON.
   - A room opens in the running editor if there is one. A `.roo` is imported, as with File → Open.
-- The version is `apps/editor/package.json`'s. Code signing and auto-updates (through GitHub releases) are planned: see [TODO.md](TODO.md).
+- The version is `apps/editor/package.json`'s. Code signing is planned: see [TODO.md](TODO.md).
+
+### Releases and updates
+
+Installers are on [GitHub Releases](https://github.com/jboullion/meridian-editor/releases). To release a version:
+
+```bash
+npm run release -- 0.2.0
+```
+
+- `tools/release/release.ts` checks you're on an up-to-date, clean `main`, runs `npm run check`, sets the version in `apps/editor/package.json`, commits and asks before it pushes `main` and the tag `v0.2.0`. Then it follows the run until the release is published (`--no-wait` leaves at once; `--watch 0.2.0` only follows).
+- The tag starts the *Release* workflow (`.github/workflows/release.yml`, after Shards' *Desktop builds*). It runs the checks, builds Windows, macOS and Linux into a draft release with the update feeds (`latest*.yml`), and publishes it only once every OS's files are there. A failed build leaves an unpublished draft.
+- Running the workflow from the Actions tab builds every OS without releasing, and keeps the installers as run artifacts for a week.
+- **Updates** (`apps/editor/src/main/updates.ts`, electron-updater): an installed editor checks the latest release when it starts.
+  - *Windows* and the *Linux AppImage* download it in the background and install it when you quit, or at once from Help → Restart to Update (which asks first if the room has unsaved changes).
+  - *macOS* can't update an unsigned app, and a *deb* belongs to the package manager, so there the status bar says a new version is out and Help → Check for Updates opens its release page.
+  - Development runs and `editor:pack` builds have no feed (`resources/app-update.yml`), so they never check.
 
 ## Editing Shards' rooms live
 

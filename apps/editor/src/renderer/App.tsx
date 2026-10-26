@@ -11,7 +11,7 @@ import { host, type RoomEntry } from "./host.ts";
 import { Inspector } from "./Inspector.tsx";
 import { MapView } from "./MapView.tsx";
 import { PreviewView } from "./PreviewView.tsx";
-import { edit, editor, isDirty, requestView, selectOne, useCursor, useEditor, type ItemKind, type Tool, type ViewMode } from "./store.ts";
+import { edit, editor, isDirty, notify, requestView, selectOne, useCursor, useEditor, type ItemKind, type Tool, type ViewMode } from "./store.ts";
 import { reloadLibrary } from "./textures/library.ts";
 import { KodPanel } from "./kod/KodPanel.tsx";
 import { kodMarks, reloadKod, roomBox, useKod, useKodRoom } from "./kod/kodStore.ts";
@@ -42,6 +42,10 @@ export function App(): React.JSX.Element {
     const offMenu = host.onMenu((command) => runCommand(command));
     const offOpen = host.onOpenFile((file) => openFromSystem(file));
     const offAgent = host.onAgentCall(handleAgentCall);
+    const offUpdate = host.onUpdate((u) => {
+      if (u.state === "ready") notify(`Version ${u.version} is ready: it installs when you quit, or now from Help → Restart to update.`);
+      else if (u.state === "available") notify(`Version ${u.version} is out: Help → Check for updates opens its download page.`);
+    });
     const onKey = (e: KeyboardEvent): void => void handleKey(e);
     window.addEventListener("keydown", onKey);
     const beforeUnload = (e: BeforeUnloadEvent): void => {
@@ -52,6 +56,7 @@ export function App(): React.JSX.Element {
       offMenu();
       offOpen();
       offAgent();
+      offUpdate();
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("beforeunload", beforeUnload);
     };

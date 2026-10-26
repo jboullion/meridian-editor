@@ -94,7 +94,7 @@ The top part holds the mode's own operations (here, sector operations such as Ma
 
 ## The menu bar
 
-The desktop app's menus (File, Edit, Modes, Tools, Search, Check, View) run the same commands as the toolbar and the palette. **File → Preferences…** sets the defaults for new sectors and walls, the drawing tools, and the textures and Kod folders.
+The desktop app's menus (File, Edit, Modes, Tools, Search, Check, View, Help) run the same commands as the toolbar and the palette. **File → Preferences…** sets the defaults for new sectors and walls, the drawing tools, and the textures and Kod folders. **Help** checks for updates and shows the version (see [Updating](01-getting-started.md#updating)).
 
 ![The Preferences dialog](images/dialog-preferences.png)
 

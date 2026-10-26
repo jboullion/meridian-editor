@@ -66,7 +66,7 @@ import {
   type Tool,
 } from "./store.ts";
 
-export type Group = "File" | "Edit" | "Mode" | "Tool" | "View" | "Vertices" | "Linedefs" | "Sectors" | "Things" | "Kod" | "Search" | "Check" | "Textures";
+export type Group = "File" | "Edit" | "Mode" | "Tool" | "View" | "Vertices" | "Linedefs" | "Sectors" | "Things" | "Kod" | "Search" | "Check" | "Textures" | "Help";
 
 export interface Command {
   id: string;
@@ -1146,6 +1146,11 @@ export const COMMANDS: Command[] = [
   // Textures
   { id: "textures.browse", label: "Browse textures…", group: "Textures", run: () => void browseTextures() },
   { id: "textures.reload", label: "Reload texture library", group: "Textures", run: () => void reloadLibrary() },
+
+  // Help: updates come from GitHub releases in an installed editor (main/updates.ts).
+  { id: "help.checkUpdates", label: "Check for updates…", group: "Help", run: () => host.checkForUpdates() },
+  { id: "help.installUpdate", label: "Restart to update", group: "Help", run: () => host.installUpdate() },
+  { id: "help.about", label: "About Meridian Room Editor", group: "Help", run: () => host.showAbout() },
 ];
 
 export const commandById = new Map(COMMANDS.map((c) => [c.id, c]));
