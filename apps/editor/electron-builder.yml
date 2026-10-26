@@ -92,6 +92,9 @@ linux:
   maintainer: Meridian Shards
   # Our npm name starts with "@", so electron-builder would name the executable after it
   executableName: meridian-room-editor
+  # The .desktop file is named after desktopName (package.json), which Electron also uses as
+  # the window's app_id, so desktops link the running window to its launcher
+  syncDesktopName: true
 
 deb:
   packageName: meridian-room-editor

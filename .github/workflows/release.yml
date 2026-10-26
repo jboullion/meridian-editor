@@ -45,8 +45,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -63,7 +63,7 @@ jobs:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: The tag matches the editor's version
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -73,7 +73,7 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME doesn't match apps/editor/package.json version $version"
             exit 1
           fi
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -107,7 +107,7 @@ jobs:
       # A run from the Actions tab keeps its installers for a week, to try before releasing
       - name: Keep the installers (not a tag)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: installers-${{ matrix.os }}
           retention-days: 7

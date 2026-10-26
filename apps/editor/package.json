@@ -5,6 +5,8 @@
   "private": true,
   "description": "Meridian room editor: edits room sources and compiles them to .roo for the original server or Server 104.",
   "author": "Meridian Shards",
+  "homepage": "https://github.com/jboullion/meridian-editor",
+  "desktopName": "meridian-room-editor.desktop",
   "license": "GPL-2.0-only",
   "type": "module",
   "main": "out/main.cjs",
