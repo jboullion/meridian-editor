@@ -99,7 +99,10 @@ const SHARDS = shardsPaths(join(import.meta.dirname, "../../../../.."));
 const KOD = process.env.KOD_DIR ?? SHARDS?.kod ?? "";
 const ROOMS = SHARDS?.roo ?? "";
 
-describe.skipIf(!existsSync(join(KOD, "include", "blakston.khd")))("the server's Kod", () => {
+// skipIf still runs the describe body to collect the tests, so the reads wait for the Kod too.
+const HAVE_KOD = existsSync(join(KOD, "include", "blakston.khd"));
+
+describe.skipIf(!HAVE_KOD)("the server's Kod", () => {
   const files: { path: string; text: string }[] = [];
   const walk = (d: string): void => {
     for (const n of readdirSync(d)) {
@@ -108,8 +111,8 @@ describe.skipIf(!existsSync(join(KOD, "include", "blakston.khd")))("the server's
       else if (n.endsWith(".kod")) files.push({ path: relative(KOD, p).split(sep).join("/"), text: readFileSync(p, "latin1") });
     }
   };
-  walk(join(KOD, "object", "active", "holder", "room"));
-  const index = buildKodIndex(KOD, files, readFileSync(join(KOD, "include", "blakston.khd"), "latin1"));
+  if (HAVE_KOD) walk(join(KOD, "object", "active", "holder", "room"));
+  const index = buildKodIndex(KOD, files, HAVE_KOD ? readFileSync(join(KOD, "include", "blakston.khd"), "latin1") : "");
 
   it("finds a class for nearly every shipped room", () => {
     const rooms = existsSync(ROOMS) ? readdirSync(ROOMS).filter((f) => f.endsWith(".roo")) : [];

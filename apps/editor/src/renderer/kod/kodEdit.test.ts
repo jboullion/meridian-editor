@@ -98,8 +98,11 @@ describe("editing a class's exits", () => {
 
 const KOD = process.env.KOD_DIR ?? shardsPaths(join(import.meta.dirname, "../../../../.."))?.kod ?? "";
 
-describe.skipIf(!existsSync(join(KOD, "include", "blakston.khd")))("editing the server's exits", () => {
-  const khd = readFileSync(join(KOD, "include", "blakston.khd"), "latin1");
+// skipIf still runs the describe body to collect the tests, so the reads wait for the Kod too.
+const HAVE_KOD = existsSync(join(KOD, "include", "blakston.khd"));
+
+describe.skipIf(!HAVE_KOD)("editing the server's exits", () => {
+  const khd = HAVE_KOD ? readFileSync(join(KOD, "include", "blakston.khd"), "latin1") : "";
   const serverRids = parseRids(khd);
   const files: { path: string; text: string }[] = [];
   const walk = (d: string): void => {
@@ -109,7 +112,7 @@ describe.skipIf(!existsSync(join(KOD, "include", "blakston.khd")))("editing the 
       else if (n.endsWith(".kod")) files.push({ path: p, text: readFileSync(p, "latin1") });
     }
   };
-  walk(join(KOD, "object", "active", "holder", "room"));
+  if (HAVE_KOD) walk(join(KOD, "object", "active", "holder", "room"));
 
   const spec = (e: KodExit): ExitSpec =>
     e.dest === null ? { row: e.row, col: e.col, dest: null, message: e.message } : { row: e.row, col: e.col, dest: e.dest, destRow: e.destRow!, destCol: e.destCol!, rotate: e.rotate };
