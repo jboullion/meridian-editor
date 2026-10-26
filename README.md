@@ -31,7 +31,9 @@ How it works:
     - Walls that drawing makes two-sided are made passable (`WF_PASSABLE`). roomedit left the flag off, which makes a drawn step a solid wall in the game. The Preference can turn this off.
   - *Rectangle* (R), *Polygon* (4), *Circle* (5): drag them out. Inside a sector they make an inner sector, or a pillar if set in Preferences.
   - *Torch* (6) and *Thing* (7): click to place.
-- **Operations:** right-click the map for the current mode's roomedit operations, or press Ctrl+Shift+P for every command. They're also in the menus.
+- **Views:** map (Ctrl+1), 3D (Ctrl+2) or both side by side (Ctrl+3).
+- **Operations:** right-click the map for the current mode's roomedit operations, or press Ctrl+Shift+P for every command. They're also in the menus. Besides roomedit's, there are *Mirror left–right* / *top–bottom* for any selection.
+- **Slopes:** *Add floor slope* and *Add ceiling slope* (Sectors mode) give a sector a sloped floor or ceiling. The inspector sets its three points' heights, and moving a vertex moves the slope points resting on it.
 - **Inspector:** every field of the selection. With several items selected, a change applies to all of them, and fields where they differ show "mixed". Texture fields have thumbnails and open the texture picker.
 - **Checks** (F9): roomedit's sector, cross-reference and texture checks. Results link to the problem, and some come with a Fix button.
 - **Textures:** `grdNNNNN.bgf` from Shards' asset build (`meridian-browser/dist/assets`, what our clients get), else the installed Meridian 104 client (`%LOCALAPPDATA%\Meridian-104\resource`), or a folder set in Preferences.
@@ -78,7 +80,7 @@ How it works:
   - It starts on the Kod arrival square. The map shows where you are and which way you face.
   - Edits apply while you walk; ceilings always show.
 - **Compile:** the room recompiles for the chosen target (104 or Original) in a worker after every change. *Export .roo* (Ctrl+E) writes the file, by default to `rooms/out`.
-- **Files:** New (Ctrl+N), Open (Ctrl+O; `.room.json`, or a `.roo` to import), Save (Ctrl+S). Undo and redo are Ctrl+Z / Ctrl+Y.
+- **Files:** New (Ctrl+N), Open (Ctrl+O; `.room.json`, or a `.roo` to import), Save (Ctrl+S), Save As (Ctrl+Shift+S), and *Open rooms folder…* to switch the folder the file list shows. Undo and redo are Ctrl+Z / Ctrl+Y.
 
 ### roomedit parity
 
@@ -234,20 +236,14 @@ Claude Code picks it up from `.mcp.json` in this repo. It starts headless, on fi
 - How it works: the editor runs a small endpoint on 127.0.0.1 (the main process, or the dev server for the web build) and writes its address and a token to `agent.json` (or `agent-web.json`) in the editor's data folder. The agent reads the room's state before each tool call and sends the changed room back afterwards.
 
 - **Tools** cover what the editor's commands, map tools and inspector do: open, new, save and export; drawing lines and shapes; every roomedit operation; setting fields and flags (by name); slopes; checks and their fixes; compiling.
-  - Reading tools describe the room for an agent: `describe_sector` gives a sector's outline, holes and neighbours, with the steps and headroom between them; `at_point` and `convert_coords` translate between editor units and Kod squares.
+  - Reading tools describe the room for an agent: `room_summary` gives counts, the room box, server ids, textures and heights; `find_items`, `get_items` and `describe_linedef` look items up; `describe_sector` gives a sector's outline, holes and neighbours, with the steps and headroom between them; `at_point` and `convert_coords` translate between editor units and Kod squares.
   - `render_map` returns a picture of the map with index labels; `view_textures` a labelled contact sheet of textures (their numbers have no names).
   - `walk` walks the room with the 3D preview's `Walker` (the client's `move.c`) and says what stopped the player and why; `saveAs` keeps the route as a `.walk.json`.
-  - Kod: `kod_room` and `kod_lights` read the room's class; for new rooms only, `kod_new_room`, `kod_add_exit`, `kod_set_exit`, `kod_remove_exit`, `kod_add_object` and `kod_set` write `rooms/new/<room>.kod` (and the tools read it ahead of the server's copy).
+  - Kod: `kod_room` and `kod_lights` read the room's class (`kod_pick_class` chooses one when several share the `.roo`; `kod_reload` reads the Kod again); for new rooms only, `kod_new_room`, `kod_add_exit`, `kod_set_exit`, `kod_remove_exit`, `kod_add_object` and `kod_set` write `rooms/new/<room>.kod` (and the tools read it ahead of the server's copy).
   - Shards: `shards_status`, `shards_install` (asks the user every time: it reloads the server's Kod, which saves the game) and `shards_walk` (only as `shardpal`, and not while it's logged in).
   - Each tool call is one undo step; `batch` makes several one step. Results carry the room's revision, and edits take `ifRevision` so a stale index fails instead of editing the wrong item.
 - **Resources and prompts:** a primer on rooms for agents (`meridian://primer`), the user manual, AGENTS.md, the ADRs, the open room's source and its Kod class; and the prompts `build-room`, `review-room` and `port-room`.
 - `packages/agent/src/coverage.ts` maps every editor command to the tools that do it; a test fails when a new command has no entry.
-
-**Working in the open editor:** `connect_editor` attaches to the editor you have open (`npm run editor`, or `npm run editor:web` with the page open), and from then on every tool works on the room open there.
-- You see each change as it's made. Each tool call (or `batch`) is one undo step, and the status bar says what the agent did ("Agent: draw rectangle").
-- If you edit the room while the agent is working on it, your edit wins: the agent's change is refused and it reads the room again.
-- Only there: `render_3d` (a picture from the 3D preview, from any spot at eye level, at any game hour), `screenshot_window` (desktop app), `select`, `set_view`, `set_lighting`, `set_display`, `walk_live` and `notify`.
-- `disconnect_editor` goes back to files.
 
 The design and its reasons are in [docs/0002-agent-tools.md](docs/0002-agent-tools.md); the user's side is in the manual's [Working with an AI agent](docs/manual/12-working-with-an-agent.md).
 
@@ -272,7 +268,7 @@ npm run roomc -- verify room.roo
 ## Rooms
 
 - **Shards' rooms** live in the shards-server repository, which meridian-browser's `server/src` links to (`apps/editor/src/main/shardsPaths.ts`; `MERIDIAN_BROWSER` or `SHARDS_SERVER` to move it):
-  - `resource/rooms/src/*.room.json` holds the sources: 357 rooms from `roomc import -d`. It's the editor's default folder.
+  - `resource/rooms/src/*.room.json` holds the sources: the 357 shipped rooms from `roomc import -d`, plus rooms made here since (`provgrnd`). It's the editor's default folder.
   - `resource/rooms/*.roo` holds the compiled rooms, committed beside them. The server build copies these to its run folder.
   - `packages/roomc/test/shardsRooms.test.ts` checks that each source compiles to its `.roo` byte for byte.
   - `d6e6ulake` has no source, since its slopes can't be reproduced.
